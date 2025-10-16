@@ -1,0 +1,45 @@
+# Build results
+[Bb]in/
+[Oo]bj/
+[Dd]ebug/
+[Rr]elease/
+x64/
+x86/
+[Aa][Rr][Mm]/
+[Aa][Rr][Mm]64/
+bld/
+[Bb]in/
+[Oo]bj/
+[Ll]og/
+[Ll]ogs/
+
+# Visual Studio
+.vs/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+*.userprefs
+
+# Database files
+*.db
+*.db-shm
+*.db-wal
+
+# ONNX models (too large for git)
+*.onnx
+models/
+
+# API keys and secrets
+.env
+*.key
+appsettings.*.json
+
+# Skill library backups
+skill_library_backup/
+
+# Temporary files
+*.tmp
+*.temp
+temp/
+

@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <Platforms>x64</Platforms>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Memux.Core\Memux.Core.csproj" />
+    <ProjectReference Include="..\Memux.Skills\Memux.Skills.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="LLamaSharp" Version="0.10.0" />
+    <PackageReference Include="LLamaSharp.Backend.Cpu" Version="0.10.0" />
+  </ItemGroup>
+
+</Project>
+
