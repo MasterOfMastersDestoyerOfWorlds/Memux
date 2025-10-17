@@ -19,12 +19,14 @@ public class SkillCompiler
             .AddReferences(
                 typeof(PerceptionState).Assembly,    // Memux.Core
                 typeof(ActionQueue).Assembly,        // Memux.Core
-                typeof(Skill).Assembly               // Memux.Skills
+                typeof(Skill).Assembly,              // Memux.Skills
+                typeof(System.Threading.Tasks.Task).Assembly // Ensure Task is available
             )
             .AddImports(
                 "System",
                 "System.Linq",
                 "System.Collections.Generic",
+                "System.Threading.Tasks",
                 "Memux.Core.Models"
             );
     }
@@ -44,7 +46,11 @@ public class SkillCompiler
                     (Memux.Core.Models.PerceptionState state) => 
                     {{
                         var queue = new Memux.Core.Models.ActionQueue();
-                        {code}
+                        System.Func<System.Threading.Tasks.Task> __runner = async () => 
+                        {{
+                            {code}
+                        }};
+                        __runner().GetAwaiter().GetResult();
                         return queue;
                     }}
                 ";

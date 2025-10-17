@@ -27,10 +27,20 @@ public class ScreenCapture
             throw new InvalidOperationException("Window handle not set");
         }
         
-        // Get window dimensions
-        GetClientRect(_windowHandle, out RECT rect);
-        int width = rect.Right - rect.Left;
-        int height = rect.Bottom - rect.Top;
+        // Get window dimensions (retry briefly if zero-sized)
+        int width = 0;
+        int height = 0;
+        for (int i = 0; i < 10; i++)
+        {
+            GetClientRect(_windowHandle, out RECT rect);
+            width = rect.Right - rect.Left;
+            height = rect.Bottom - rect.Top;
+            if (width > 0 && height > 0)
+            {
+                break;
+            }
+            Thread.Sleep(50);
+        }
         
         if (width <= 0 || height <= 0)
         {

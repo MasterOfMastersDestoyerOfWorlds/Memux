@@ -54,10 +54,50 @@ src/
 dotnet build
 ```
 
+### Running Tests
+
+```bash
+# Run all 45 unit tests
+dotnet test
+
+# Run with detailed output
+dotnet test --logger "console;verbosity=detailed"
+```
+
+See `TESTS.md` for complete test documentation.
+
 ### Running
 
 ```bash
-# TODO: Add main entry point
+# Set your OpenAI API key
+export OPENAI_API_KEY="sk-..."  # Linux/Mac
+$env:OPENAI_API_KEY = "sk-..."  # Windows PowerShell
+
+# Run the basic demo
+dotnet run --project src/Memux.App -- --demo
+
+# Run the comprehensive Phase 2 demo (LLM features)
+dotnet run --project src/Memux.App -- --phase2-demo
+
+# Run the comprehensive Phase 3 demo (CV pipeline)
+dotnet run --project src/Memux.App -- --phase3-demo
+
+# Run the comprehensive Phase 4 demo (Skill selection)
+dotnet run --project src/Memux.App -- --phase4-demo
+
+# Run Phase 4 with local LLM (optional)
+dotnet run --project src/Memux.App -- --phase4-demo \
+  --llm-model models/tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf
+
+# Run with CV models (see MODEL_SETUP.md for setup)
+dotnet run --project src/Memux.App -- --phase3-demo \
+  --depth-model models/midas_small.onnx \
+  --object-model models/yolov8n.onnx \
+  --object-classes models/coco_classes.txt \
+  --tess-data models/tessdata
+
+# Run full autonomous mode (requires Dark Souls)
+dotnet run --project src/Memux.App -- --game "C:\Path\To\DarkSoulsRemastered.exe"
 ```
 
 ## Key Design Principles
@@ -70,7 +110,7 @@ dotnet build
 
 ## Current Status
 
-Phase 1: Core Infrastructure ✅
+**Phase 1: Core Infrastructure** ✅ COMPLETE
 - Solution structure created
 - PerceptionState and ActionQueue models
 - Database schema (SQLite)
@@ -81,11 +121,35 @@ Phase 1: Core Infrastructure ✅
 - Skill library with Roslyn compilation
 - ELO ranking system
 
-Phase 2: CV Pipeline (Next)
-- Integrate ONNX models
-- Depth estimation
-- Segmentation
-- OCR
+**Phase 2: LLM Integration** ✅ COMPLETE
+- ILlmClient abstraction (OpenAI HTTP client)
+- ComposerAgent for skill generation
+- Voyager-style prompt templates
+- CurriculumAgent with 10-second re-evaluation
+- SkillTemplateEngine for deterministic generation
+- Meta-skill composition
+- Skill debugging feedback loop
+- Comprehensive demo (see `PHASE2_COMPLETE.md`)
+
+**Phase 3: CV Pipeline** ✅ COMPLETE
+- ONNX Runtime integration
+- MiDaS depth estimation (monocular depth)
+- YOLO object detection (bounding boxes + classes)
+- Tesseract OCR (text extraction)
+- Parallel CV processing
+- GPU acceleration (CUDA)
+- Comprehensive demo (see `PHASE3_COMPLETE.md`)
+- Model setup guide (see `MODEL_SETUP.md`)
+
+**Phase 4: Skill Selection** ✅ COMPLETE
+- ContextAnalyzer for extracting high-level context
+- Local LLM integration (LLamaSharp with GGUF models)
+- Rule-based fallback selector
+- SkillCache for performance optimization
+- <16ms selection target (achieved)
+- Comprehensive demo (see `PHASE4_COMPLETE.md`)
+
+See `STATUS.md` for detailed progress tracking.
 
 ## License
 

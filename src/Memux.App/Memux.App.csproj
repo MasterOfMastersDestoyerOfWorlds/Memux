@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <Platforms>x64</Platforms>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Memux.Core\Memux.Core.csproj" />
+    <ProjectReference Include="..\Memux.Skills\Memux.Skills.csproj" />
+    <ProjectReference Include="..\Memux.Actions\Memux.Actions.csproj" />
+    <ProjectReference Include="..\Memux.Perception\Memux.Perception.csproj" />
+    <ProjectReference Include="..\Memux.Selection\Memux.Selection.csproj" />
+    <ProjectReference Include="..\Memux.Composer\Memux.Composer.csproj" />
+    <ProjectReference Include="..\Memux.Curriculum\Memux.Curriculum.csproj" />
+    <ProjectReference Include="..\Memux.DarkSouls\Memux.DarkSouls.csproj" />
+    <ProjectReference Include="..\Memux.CodeGen\Memux.CodeGen.csproj" />
+  </ItemGroup>
+
+</Project>
+

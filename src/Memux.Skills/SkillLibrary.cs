@@ -20,6 +20,12 @@ public class SkillLibrary
         _compiler = new SkillCompiler();
     }
     
+    public SkillLibrary(MemuxDatabase database)
+    {
+        _database = database;
+        _compiler = new SkillCompiler();
+    }
+    
     /// <summary>
     /// Add a new skill to the library
     /// </summary>
@@ -30,6 +36,18 @@ public class SkillLibrary
         List<string>? dependencies = null,
         string? codeLocation = null)
     {
+        // If a skill with this name already exists, return it
+        var existingByName = _database.GetSkillByName(name);
+        if (existingByName != null)
+        {
+            var loaded = await LoadSkillFromRecord(existingByName);
+            lock (_lock)
+            {
+                _loadedSkills[loaded.Id] = loaded;
+            }
+            return loaded;
+        }
+
         var skill = new Skill
         {
             Name = name,
@@ -54,6 +72,92 @@ public class SkillLibrary
         );
         
         // Cache in memory
+        lock (_lock)
+        {
+            _loadedSkills[skill.Id] = skill;
+        }
+        
+        return skill;
+    }
+    
+    /// <summary>
+    /// Add skill (synchronous wrapper)
+    /// </summary>
+    public Skill AddSkill(Skill skill)
+    {
+        // If a skill with this name already exists, return it
+        var existingByName = _database.GetSkillByName(skill.Name);
+        if (existingByName != null)
+        {
+            var loaded = LoadSkillFromRecord(existingByName).GetAwaiter().GetResult();
+            lock (_lock)
+            {
+                _loadedSkills[loaded.Id] = loaded;
+            }
+            return loaded;
+        }
+
+        // Compile the skill synchronously
+        skill.Execute = _compiler.CompileAsync(skill.Code).GetAwaiter().GetResult();
+        
+        // Store in database
+        _database.InsertSkill(
+            skill.Id,
+            skill.Name,
+            skill.Code,
+            skill.Dependencies,
+            skill.Tags,
+            skill.CodeLocation,
+            skill.EloRating
+        );
+        
+        // Cache in memory
+        lock (_lock)
+        {
+            _loadedSkills[skill.Id] = skill;
+        }
+        
+        return skill;
+    }
+    
+    /// <summary>
+    /// Get all skills (synchronous)
+    /// </summary>
+    public List<Skill> GetAllSkills()
+    {
+        var records = _database.GetTopSkillsByElo(1000); // Get up to 1000 skills
+        var skills = new List<Skill>();
+        
+        foreach (var record in records)
+        {
+            var skill = LoadSkillFromRecord(record).GetAwaiter().GetResult();
+            skills.Add(skill);
+        }
+        
+        return skills;
+    }
+    
+    /// <summary>
+    /// Get skill by ID (synchronous)
+    /// </summary>
+    public Skill? GetSkillById(string id)
+    {
+        lock (_lock)
+        {
+            if (_loadedSkills.TryGetValue(id, out var cachedSkill))
+            {
+                return cachedSkill;
+            }
+        }
+        
+        var record = _database.GetSkillById(id);
+        if (record == null)
+        {
+            return null;
+        }
+        
+        var skill = LoadSkillFromRecord(record).GetAwaiter().GetResult();
+        
         lock (_lock)
         {
             _loadedSkills[skill.Id] = skill;

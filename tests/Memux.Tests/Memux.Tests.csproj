@@ -1,0 +1,32 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="coverlet.collector" Version="6.0.2" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.12.0" />
+    <PackageReference Include="xunit" Version="2.9.2" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Memux.Core\Memux.Core.csproj" />
+    <ProjectReference Include="..\..\src\Memux.Skills\Memux.Skills.csproj" />
+    <ProjectReference Include="..\..\src\Memux.Composer\Memux.Composer.csproj" />
+    <ProjectReference Include="..\..\src\Memux.Curriculum\Memux.Curriculum.csproj" />
+    <ProjectReference Include="..\..\src\Memux.CodeGen\Memux.CodeGen.csproj" />
+    <ProjectReference Include="..\..\src\Memux.Perception\Memux.Perception.csproj" />
+    <ProjectReference Include="..\..\src\Memux.DarkSouls\Memux.DarkSouls.csproj" />
+    <ProjectReference Include="..\..\src\Memux.Selection\Memux.Selection.csproj" />
+  </ItemGroup>
+
+</Project>

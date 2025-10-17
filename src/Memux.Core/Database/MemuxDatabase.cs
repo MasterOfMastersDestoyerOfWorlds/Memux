@@ -112,6 +112,25 @@ public class MemuxDatabase : IDisposable
         command.Parameters.AddWithValue("$updated_at", DateTime.UtcNow.ToString("O"));
         command.ExecuteNonQuery();
     }
+
+    public SkillRecord? GetSkillByName(string name)
+    {
+        var command = _connection.CreateCommand();
+        command.CommandText = @"
+            SELECT id, name, code, dependencies, elo_rating, tags, code_location, usage_count
+            FROM skills
+            WHERE name = $name
+            LIMIT 1
+        ";
+        command.Parameters.AddWithValue("$name", name);
+
+        using var reader = command.ExecuteReader();
+        if (reader.Read())
+        {
+            return ReadSkillRecord(reader);
+        }
+        return null;
+    }
     
     public void UpdateSkillElo(string skillId, double newElo)
     {

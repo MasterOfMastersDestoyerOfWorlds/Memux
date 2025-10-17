@@ -179,27 +179,81 @@ var goals = await curriculum.GenerateInitialGoalsAsync(
 // Goals will be re-evaluated every 10 seconds automatically
 ```
 
+### 9. Run the Phase 2 Demo
+
+To see all Phase 2 features in action:
+
+```bash
+# Set your API key
+$env:OPENAI_API_KEY = "sk-..."
+
+# Run comprehensive Phase 2 demo
+dotnet run --project src\Memux.App -- --phase2-demo
+
+# Or with explicit API key
+dotnet run --project src\Memux.App -- --phase2-demo --api-key sk-...
+```
+
+The demo will showcase:
+- LLM skill generation
+- Template-based skill variations
+- Meta-skill composition
+- Curriculum goal generation
+- 10-second re-evaluation timer
+- Skill debugging feedback loop
+
+### 10. Run the Phase 3 Demo
+
+To test the computer vision pipeline:
+
+```bash
+# Test screen capture only (no models needed)
+dotnet run --project src\Memux.App -- --phase3-demo
+
+# Test with full CV pipeline (after downloading models)
+dotnet run --project src\Memux.App -- --phase3-demo \
+  --depth-model models/midas_small.onnx \
+  --object-model models/yolov8n.onnx \
+  --object-classes models/coco_classes.txt \
+  --tess-data models/tessdata
+```
+
+The demo will showcase:
+- Screen capture performance
+- Depth estimation (MiDaS)
+- Object detection (YOLO)
+- OCR text extraction (Tesseract)
+- Full pipeline integration
+- Real-time capture mode
+
+**See `MODEL_SETUP.md` for instructions on downloading CV models.**
+
 ## Current Status
 
-### ✅ Implemented (Phase 1)
+### ✅ Implemented (Phase 1, 2 & 3)
 
 - Core data structures (PerceptionState, ActionQueue, Goal)
 - SQLite database with skill storage
 - Screen capture (BitBlt)
+- **Depth estimation (MiDaS via ONNX)**
+- **Object detection (YOLO via ONNX)**
+- **OCR text extraction (Tesseract)**
+- **Full CV pipeline with parallel processing**
 - Input simulation (keyboard, controller)
 - Process manager for launching applications
 - Skill library with Roslyn compilation
 - ELO ranking system
 - Windows notification system
 - LLM integration (OpenAI via HTTP)
+- ComposerAgent for skill generation and debugging
 - Curriculum agent with 10-second re-evaluation
 - Code generation template engine
 - Dark Souls integration stub
+- Comprehensive demos for Phase 2 and Phase 3
 
-### 🚧 TODO (Phase 2+)
+### 🚧 TODO (Phase 4+)
 
-- CV pipeline (depth estimation, segmentation, OCR) via ONNX
-- Local LLM integration (LLamaSharp)
+- Local LLM integration (LLamaSharp) for skill selection
 - Pattern detection for automatic skill composition
 - Skill selection caching
 - Full autonomous loop orchestration
