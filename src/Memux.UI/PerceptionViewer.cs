@@ -64,6 +64,7 @@ public static class PerceptionViewer
             ? PerceptionRenderer.CreateObjectsSegmentation(baseBmp, state.ObjectSegmentation, state.DetectedObjects, state.Width, state.Height)
             : PerceptionRenderer.CreateObjectsOverlay(baseBmp, state.DetectedObjects);
         Bitmap? ocrBmp = PerceptionRenderer.CreateOcrOverlay(baseBmp, state.OcrResults);
+        Bitmap? ocrProcessedBmp = PerceptionRenderer.CreateOcrProcessedImage(state.OcrProcessedImage, state.OcrProcessedImageWidth, state.OcrProcessedImageHeight);
         baseBmp?.Dispose();
 
         try
@@ -71,8 +72,7 @@ public static class PerceptionViewer
             form.BeginInvoke(new Action(() =>
             {
                 if (form.IsDisposed) return;
-                form.UpdatePerception(state, depthBmp, objectsBmp, ocrBmp);
-                form.UpdateOcrText(state.OcrResults);
+                form.UpdatePerception(state, depthBmp, objectsBmp, ocrBmp, ocrProcessedBmp);
                 form.UpdateGoalsAndPlan(goal, nextSkillName, subskillTree);
             }));
         }
@@ -81,6 +81,7 @@ public static class PerceptionViewer
             depthBmp?.Dispose();
             objectsBmp?.Dispose();
             ocrBmp?.Dispose();
+            ocrProcessedBmp?.Dispose();
         }
     }
 

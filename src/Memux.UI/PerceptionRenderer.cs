@@ -82,6 +82,34 @@ public static class PerceptionRenderer
         return bmp;
     }
 
+    public static Bitmap? CreateOcrProcessedImage(byte[]? grayData, int width, int height)
+    {
+        if (grayData == null || grayData.Length == 0 || width <= 0 || height <= 0) return null;
+        var bmp = new Bitmap(width, height, PixelFormat.Format32bppArgb);
+        var rect = new Rectangle(0, 0, width, height);
+        var data = bmp.LockBits(rect, ImageLockMode.WriteOnly, PixelFormat.Format32bppArgb);
+        try
+        {
+            int len = width * height;
+            var buffer = new byte[len * 4];
+            for (int i = 0; i < len; i++)
+            {
+                byte gray = grayData[i];
+                int idx = i * 4;
+                buffer[idx + 0] = gray; // B
+                buffer[idx + 1] = gray; // G
+                buffer[idx + 2] = gray; // R
+                buffer[idx + 3] = 255;  // A
+            }
+            Marshal.Copy(buffer, 0, data.Scan0, buffer.Length);
+        }
+        finally
+        {
+            bmp.UnlockBits(data);
+        }
+        return bmp;
+    }
+
     public static Bitmap? CreateOcrOverlay(Bitmap? baseImage, List<OcrResult>? ocrResults)
     {
         if (baseImage == null) return null;

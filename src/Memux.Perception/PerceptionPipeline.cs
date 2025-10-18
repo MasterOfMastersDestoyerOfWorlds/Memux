@@ -1,5 +1,6 @@
 using Memux.Core.Models;
 using Memux.Core;
+using System;
 
 namespace Memux.Perception;
 
@@ -13,10 +14,10 @@ public class PerceptionPipeline : IDisposable
     private readonly DepthEstimator? _depthEstimator;
     private readonly ObjectDetector? _objectDetector;
     private readonly OcrEngine? _ocrEngine;
-    
+
     private DateTime _lastCaptureTime;
     private int _frameCount;
-    
+
     public PerceptionPipeline(
         IntPtr windowHandle,
         string? depthModelPath = null,
@@ -26,23 +27,23 @@ public class PerceptionPipeline : IDisposable
         bool useGpu = true)
     {
         _screenCapture = new ScreenCapture(windowHandle);
-        
+
         // Initialize CV models if paths provided
         if (!string.IsNullOrEmpty(depthModelPath))
         {
             _depthEstimator = new DepthEstimator(depthModelPath, useGpu);
         }
-        
+
         if (!string.IsNullOrEmpty(objectDetectionModelPath) && !string.IsNullOrEmpty(objectDetectionClassesPath))
         {
             _objectDetector = new ObjectDetector(objectDetectionModelPath, objectDetectionClassesPath, useGpu);
         }
-        
+
         // Initialize OCR engine - use provided path or default to ./tessdata
         string ocrPath = !string.IsNullOrEmpty(tessDataPath) ? tessDataPath : "./tessdata";
         _ocrEngine = new OcrEngine(ocrPath);
     }
-    
+
     /// <summary>
     /// Capture current frame and run full perception pipeline
     /// </summary>
@@ -52,19 +53,15 @@ public class PerceptionPipeline : IDisposable
         {
             Timestamp = DateTime.UtcNow
         };
-        
+
         try
         {
-            // Capture screen
             var (data, width, height) = _screenCapture.CaptureFrame();
             state.ScreenData = data;
             state.Width = width;
             state.Height = height;
-            
-            // Run CV models in parallel for speed
             var tasks = new List<Task>();
-            
-            // Depth estimation
+
             if (_depthEstimator != null)
             {
                 tasks.Add(Task.Run(() =>
@@ -72,8 +69,8 @@ public class PerceptionPipeline : IDisposable
                     state.DepthMap = _depthEstimator.EstimateDepth(data, width, height);
                 }));
             }
-            
-            // Object detection
+
+
             if (_objectDetector != null)
             {
                 tasks.Add(Task.Run(() =>
@@ -81,13 +78,16 @@ public class PerceptionPipeline : IDisposable
                     state.DetectedObjects = _objectDetector.DetectObjects(data, width, height);
                 }));
             }
-            
-            // OCR (most expensive, run last)
+
             if (_ocrEngine != null)
             {
                 tasks.Add(Task.Run(() =>
                 {
-                    state.OcrResults = _ocrEngine.ExtractText(data, width, height);
+                    var (results, processedImage, imgWidth, imgHeight) = _ocrEngine.ExtractText(data, width, height);
+                    state.OcrResults = results;
+                    state.OcrProcessedImage = processedImage;
+                    state.OcrProcessedImageWidth = imgWidth;
+                    state.OcrProcessedImageHeight = imgHeight;
                 }));
             }
             
@@ -106,10 +106,10 @@ public class PerceptionPipeline : IDisposable
         {
             Console.WriteLine($"Perception pipeline error: {ex.Message}");
         }
-        
+
         return state;
     }
-    
+
     /// <summary>
     /// Quick capture without expensive CV (for low-latency scenarios)
     /// </summary>
@@ -138,7 +138,7 @@ public class PerceptionPipeline : IDisposable
             };
         }
     }
-    
+
     public void Dispose()
     {
         _depthEstimator?.Dispose();

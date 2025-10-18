@@ -1,7 +1,9 @@
+using System;
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.IO;
 using Tesseract;
 using Memux.Core.Models;
-using SixLabors.ImageSharp;
-using SixLabors.ImageSharp.PixelFormats;
 
 namespace Memux.Perception;
 
@@ -13,18 +15,18 @@ public class OcrEngine : IDisposable
 {
     private TesseractEngine? _engine;
     private readonly string _tessDataPath;
-    
+
     public OcrEngine(string tessDataPath = "./tessdata")
     {
         _tessDataPath = tessDataPath;
-        
+
         if (!Directory.Exists(tessDataPath))
         {
             Console.WriteLine($"Warning: Tesseract data not found at {tessDataPath}");
             Console.WriteLine("OCR will be disabled. Download tessdata to enable.");
             return;
         }
-        
+
         try
         {
             _engine = new TesseractEngine(tessDataPath, "eng", EngineMode.Default);
@@ -35,199 +37,164 @@ public class OcrEngine : IDisposable
             Console.WriteLine($"Failed to load OCR engine: {ex.Message}");
         }
     }
-    
+
     /// <summary>
     /// Extract text from entire image
     /// </summary>
-    public List<OcrResult> ExtractText(byte[] rgbaData, int width, int height)
+    public (List<OcrResult> Results, byte[]? ProcessedImageData, int Width, int Height) ExtractText(byte[] rgbaData, int width, int height)
     {
         if (_engine == null)
-        {
-            return new List<OcrResult>();
-        }
-        
+            return (new List<OcrResult>(), null, width, height);
+
         try
         {
-            // Convert BGRA to grayscale for better OCR
-            var grayData = ConvertToGrayscale(rgbaData, width, height);
-            
-            // Create a temporary PNG file and load it
-            var tempFile = Path.GetTempFileName() + ".png";
-            try
+            Console.WriteLine($"widht: {width} height: {height}");
+            using var img = Pix.Create(width, height, 32);
+            System.Runtime.InteropServices.Marshal.Copy(rgbaData, 0, img.GetData().Data, rgbaData.Length);
+
+            using var page = _engine.Process(img, PageSegMode.SparseText);
+
+            var stopwatch = Stopwatch.StartNew();
+            var results = new List<OcrResult>();
+            using var iter = page.GetIterator();
+            iter.Begin();
+
+            stopwatch.Stop();
+            Console.WriteLine($"OCR processing took {stopwatch.ElapsedMilliseconds} ms");
+            do
             {
-                CreateGrayscalePng(grayData, width, height, tempFile);
-                using var img = Pix.LoadFromFile(tempFile);
-                using var page = _engine.Process(img);
-                
-                var results = new List<OcrResult>();
-                
-                // Get text with bounding boxes
-                using var iter = page.GetIterator();
-                iter.Begin();
-                
-                do
+                if (iter.TryGetBoundingBox(PageIteratorLevel.Word, out var bounds))
                 {
-                    if (iter.TryGetBoundingBox(PageIteratorLevel.Word, out var bounds))
+                    string word = iter.GetText(PageIteratorLevel.Word);
+                    float confidence = iter.GetConfidence(PageIteratorLevel.Word) / 100f;
+
+                    if (confidence > 0.5f && !string.IsNullOrWhiteSpace(word))
                     {
-                        string word = iter.GetText(PageIteratorLevel.Word);
-                        float confidence = iter.GetConfidence(PageIteratorLevel.Word) / 100f;
-                        
-                        if (confidence > 0.5f && !string.IsNullOrWhiteSpace(word))
+                        results.Add(new OcrResult
                         {
-                            results.Add(new OcrResult
+                            Text = word.Trim(),
+                            Confidence = confidence,
+                            BoundingBox = new BoundingBox
                             {
-                                Text = word.Trim(),
-                                Confidence = confidence,
-                                BoundingBox = new BoundingBox
-                                {
-                                    X = bounds.X1,
-                                    Y = bounds.Y1,
-                                    Width = bounds.X2 - bounds.X1,
-                                    Height = bounds.Y2 - bounds.Y1
-                                }
-                            });
-                        }
+                                X = bounds.X1,
+                                Y = bounds.Y1,
+                                Width = bounds.X2 - bounds.X1,
+                                Height = bounds.Y2 - bounds.Y1
+                            }
+                        });
                     }
-                } while (iter.Next(PageIteratorLevel.Word));
-                
-                return results;
-            }
-            finally
-            {
-                if (File.Exists(tempFile))
-                    File.Delete(tempFile);
-            }
+                }
+            } while (iter.Next(PageIteratorLevel.Word));
+
+            // Return the processed image data along with results
+            return (results, rgbaData, width, height);
         }
         catch (Exception ex)
         {
             Console.WriteLine($"OCR error: {ex.Message}");
-            return new List<OcrResult>();
+            return (new List<OcrResult>(), null, width, height);
         }
     }
-    
+
     /// <summary>
-    /// Extract text from specific region
+    /// Converts a BGRA image to a 1-bit black and white image.
     /// </summary>
-    public string? ExtractTextFromRegion(byte[] rgbaData, int width, int height, int x, int y, int regionWidth, int regionHeight)
+    /// <param name="bgra">The source image data in 32-bit BGRA format.</param>
+    /// <param name="width">The width of the image.</param>
+    /// <param name="height">The height of the image.</param>
+    /// <param name="threshold">The brightness threshold (0-255). Pixels brighter than this become white.</param>
+    /// <param name="invert">Set to true for white text on a dark background.</param>
+    /// <returns>A binarized byte array (one byte per pixel, value is 0 or 255).</returns>
+    private byte[] Binarize(byte[] bgra, int width, int height, byte threshold = 128, bool invert = false)
     {
-        if (_engine == null)
+        // The output is still a byte per pixel, but the value will only be 0 (black) or 255 (white).
+        var binarized = new byte[width * height];
+
+        unsafe
         {
-            return null;
-        }
-        
-        try
-        {
-            // Crop to region
-            var regionData = CropRegion(rgbaData, width, height, x, y, regionWidth, regionHeight);
-            var grayData = ConvertToGrayscale(regionData, regionWidth, regionHeight);
-            
-            // Create a temporary PNG file and load it
-            var tempFile = Path.GetTempFileName() + ".png";
-            try
+            fixed (byte* src = bgra)
+            fixed (byte* dst = binarized)
             {
-                CreateGrayscalePng(grayData, regionWidth, regionHeight, tempFile);
-                using var img = Pix.LoadFromFile(tempFile);
-                using var page = _engine.Process(img);
-                
-                return page.GetText();
-            }
-            finally
-            {
-                if (File.Exists(tempFile))
-                    File.Delete(tempFile);
-            }
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"OCR region error: {ex.Message}");
-            return null;
-        }
-    }
-    
-    private byte[] ConvertToGrayscale(byte[] bgra, int width, int height)
-    {
-        var gray = new byte[width * height];
-        
-        for (int i = 0; i < width * height; i++)
-        {
-            int idx = i * 4;
-            if (idx + 2 < bgra.Length)
-            {
-                // Grayscale conversion: 0.299*R + 0.587*G + 0.114*B
-                gray[i] = (byte)(0.299 * bgra[idx + 2] + 0.587 * bgra[idx + 1] + 0.114 * bgra[idx]);
-            }
-        }
-        
-        return gray;
-    }
-    
-    private byte[] CropRegion(byte[] bgra, int width, int height, int x, int y, int cropWidth, int cropHeight)
-    {
-        var cropped = new byte[cropWidth * cropHeight * 4];
-        
-        for (int cy = 0; cy < cropHeight; cy++)
-        {
-            for (int cx = 0; cx < cropWidth; cx++)
-            {
-                int srcX = x + cx;
-                int srcY = y + cy;
-                
-                if (srcX >= 0 && srcX < width && srcY >= 0 && srcY < height)
+                byte* s = src;
+                byte* d = dst;
+
+                for (int i = 0; i < width * height; i++, s += 4)
                 {
-                    int srcIdx = (srcY * width + srcX) * 4;
-                    int dstIdx = (cy * cropWidth + cx) * 4;
-                    
-                    Array.Copy(bgra, srcIdx, cropped, dstIdx, 4);
-                }
-            }
-        }
-        
-        return cropped;
-    }
-    
-    private void CreateGrayscalePng(byte[] grayData, int width, int height, string filePath)
-    {
-        using var bitmap = new System.Drawing.Bitmap(width, height, System.Drawing.Imaging.PixelFormat.Format8bppIndexed);
-        
-        // Set up grayscale palette
-        var palette = bitmap.Palette;
-        for (int i = 0; i < 256; i++)
-        {
-            palette.Entries[i] = System.Drawing.Color.FromArgb(i, i, i);
-        }
-        bitmap.Palette = palette;
-        
-        // Lock bitmap data and copy grayscale data
-        var bitmapData = bitmap.LockBits(
-            new System.Drawing.Rectangle(0, 0, width, height),
-            System.Drawing.Imaging.ImageLockMode.WriteOnly,
-            System.Drawing.Imaging.PixelFormat.Format8bppIndexed);
-        
-        try
-        {
-            unsafe
-            {
-                byte* ptr = (byte*)bitmapData.Scan0;
-                for (int y = 0; y < height; y++)
-                {
-                    for (int x = 0; x < width; x++)
+                    // First, calculate the grayscale value same as before
+                    // Using integer arithmetic can be faster: (77*R + 150*G + 29*B) >> 8
+                    byte grayValue = (byte)(0.299f * s[2] + 0.587f * s[1] + 0.114f * s[0]);
+
+                    // Second, apply the threshold to determine black or white.
+                    if (invert)
                     {
-                        ptr[y * bitmapData.Stride + x] = grayData[y * width + x];
+                        // For inverted text (e.g., white text on black background),
+                        // we want the bright text to become black for Tesseract.
+                        *d++ = (grayValue > threshold) ? (byte)0 : (byte)255;
+                    }
+                    else
+                    {
+                        // For standard text (black text on white background),
+                        // we want the dark text to become black.
+                        *d++ = (grayValue > threshold) ? (byte)255 : (byte)0;
                     }
                 }
             }
         }
-        finally
-        {
-            bitmap.UnlockBits(bitmapData);
-        }
-        
-        bitmap.Save(filePath, System.Drawing.Imaging.ImageFormat.Png);
+
+        return binarized;
     }
-    
+    private byte[] ConvertToGrayscale(byte[] bgra, int width, int height)
+    {
+        var gray = new byte[width * height];
+        int length = width * height * 4;
+
+        unsafe
+        {
+            fixed (byte* src = bgra)
+            fixed (byte* dst = gray)
+            {
+                byte* s = src;
+                byte* d = dst;
+
+                for (int i = 0; i < width * height; i++, s += 4)
+                {
+                    // 0.299R + 0.587G + 0.114B
+                    *d++ = (byte)(0.299f * s[2] + 0.587f * s[1] + 0.114f * s[0]);
+                }
+            }
+        }
+
+        return gray;
+    }
+
+    private byte[] CropRegion(byte[] bgra, int width, int height, int x, int y, int cropWidth, int cropHeight)
+    {
+        var cropped = new byte[cropWidth * cropHeight * 4];
+
+        unsafe
+        {
+            fixed (byte* src = bgra)
+            fixed (byte* dst = cropped)
+            {
+                for (int cy = 0; cy < cropHeight; cy++)
+                {
+                    int srcY = y + cy;
+                    if (srcY < 0 || srcY >= height) continue;
+
+                    byte* srcRow = src + (srcY * width + x) * 4;
+                    byte* dstRow = dst + cy * cropWidth * 4;
+
+                    int copyWidth = Math.Min(cropWidth, width - x);
+                    Buffer.MemoryCopy(srcRow, dstRow, cropWidth * 4, copyWidth * 4);
+                }
+            }
+        }
+
+        return cropped;
+    }
+
     public void Dispose()
     {
         _engine?.Dispose();
     }
 }
-

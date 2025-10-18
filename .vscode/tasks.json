@@ -66,6 +66,138 @@
       "dependsOn": ["Run Memux.App (Main)"],
       "dependsOrder": "sequence",
       "problemMatcher": []
+    },
+    {
+      "label": "Profile: Install dotnet-trace",
+      "type": "shell",
+      "command": "dotnet",
+      "args": ["tool", "install", "--global", "dotnet-trace"],
+      "problemMatcher": [],
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": false,
+        "panel": "shared"
+      }
+    },
+    {
+      "label": "Profile: Start Memux for Profiling",
+      "type": "process",
+      "command": "dotnet",
+      "args": [
+        "run",
+        "--project",
+        "src/Memux.App/Memux.App.csproj"
+      ],
+      "isBackground": true,
+      "problemMatcher": {
+        "pattern": {
+          "regexp": "^(.*)$",
+          "file": 1
+        },
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": ".*",
+          "endsPattern": "Memux orchestrator started|perception viewer.*"
+        }
+      },
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": false,
+        "panel": "dedicated",
+        "showReuseMessage": false,
+        "group": "profile"
+      }
+    },
+    {
+      "label": "Profile: Collect Trace (Until Close)",
+      "type": "shell",
+      "command": "powershell",
+      "args": [
+        "-Command",
+        "Write-Host 'Waiting for Memux to start...'; Start-Sleep 5; $found = $false; for ($i = 0; $i -lt 30; $i++) { $processes = Get-Process dotnet -ErrorAction SilentlyContinue | Sort-Object StartTime -Descending | Select-Object -First 3; foreach ($p in $processes) { try { $cmdLine = (Get-WmiObject Win32_Process -Filter \"ProcessId = $($p.Id)\").CommandLine; if ($cmdLine -like '*Memux.App*') { Write-Host \"Found Memux process PID: $($p.Id)\"; Write-Host 'Collecting trace until you close Memux...'; dotnet-trace collect --process-id $($p.Id) --profile cpu-sampling --output memux-trace.nettrace; Write-Host 'Trace collected: memux-trace.nettrace'; $found = $true; break; } } catch {} } if ($found) { break; } Start-Sleep 1; } if (-not $found) { Write-Host 'Memux process not found after 30 seconds. Please check if Memux started correctly.' }"
+      ],
+      "dependsOn": ["Profile: Start Memux for Profiling"],
+      "problemMatcher": [],
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": true,
+        "panel": "dedicated",
+        "showReuseMessage": false,
+        "group": "profile"
+      }
+    },
+    {
+      "label": "Profile: Convert to Speedscope",
+      "type": "shell",
+      "command": "powershell",
+      "args": [
+        "-Command",
+        "dotnet-trace convert memux-trace.nettrace --format speedscope --output memux-trace.speedscope.json"
+      ],
+      "problemMatcher": [],
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": true,
+        "panel": "shared"
+      }
+    },
+    {
+      "label": "Profile: Open in Browser",
+      "type": "shell",
+      "command": "powershell",
+      "args": [
+        "-Command",
+        "Write-Host 'Upload memux-trace.speedscope.json to https://www.speedscope.app/'; Start-Process 'https://www.speedscope.app/'"
+      ],
+      "problemMatcher": []
+    },
+    {
+      "label": "Profile: Full Workflow",
+      "dependsOrder": "sequence",
+      "dependsOn": [
+        "Profile: Start Memux for Profiling",
+        "Profile: Collect Trace (Until Close)",
+        "Profile: Convert to Speedscope",
+        "Profile: Open in Browser"
+      ],
+      "problemMatcher": []
+    },
+    {
+      "label": "Profile: Quick 60s Trace",
+      "type": "shell",
+      "command": "powershell",
+      "args": [
+        "-Command",
+        "Write-Host 'Starting Memux in background...'; Start-Process dotnet -ArgumentList 'run','--project','src/Memux.App/Memux.App.csproj' -WindowStyle Hidden; Start-Sleep 5; $PID = (Get-Process | Where-Object {$_.ProcessName -like '*Memux*' -or $_.ProcessName -like '*dotnet*'} | Select-Object -First 1).Id; if ($PID) { Write-Host \"Collecting 60s trace from PID: $PID\"; dotnet-trace collect --process-id $PID --duration 00:01:00 --profile cpu-sampling --output memux-trace.nettrace; dotnet-trace convert memux-trace.nettrace --format speedscope; Write-Host '✓ Done! Upload memux-trace.speedscope.json to https://www.speedscope.app/' } else { Write-Host 'No Memux process found' }"
+      ],
+      "problemMatcher": []
+    },
+    {
+      "label": "Profile: Start and Attach to Memux",
+      "type": "process",
+      "command": "powershell",
+      "args": [
+        "-NoProfile",
+        "-Command",
+        "&{Write-Host 'Starting Memux...'; $job = Start-Job -ScriptBlock { Set-Location $using:PWD; dotnet run --project src/Memux.App/Memux.App.csproj }; Start-Sleep 5; Write-Host 'Looking for Memux process...'; $found = $false; for ($i = 0; $i -lt 30; $i++) { $processes = Get-Process dotnet -ErrorAction SilentlyContinue | Sort-Object StartTime -Descending | Select-Object -First 5; foreach ($p in $processes) { try { $cmdLine = (Get-WmiObject Win32_Process -Filter \"ProcessId = $($p.Id)\").CommandLine; if ($cmdLine -like '*Memux.App*') { Write-Host \"Found Memux PID: $($p.Id)\"; Write-Host 'Collecting trace. Close Memux when done...'; dotnet-trace collect --process-id $($p.Id) --profile cpu-sampling --output memux-trace.nettrace; Write-Host 'Converting to speedscope format...'; dotnet-trace convert memux-trace.nettrace --format speedscope --output memux-trace.speedscope.json; Write-Host '✓ Trace saved and converted!'; Start-Process 'https://www.speedscope.app/'; $found = $true; break; } } catch {} } if ($found) { break; } Start-Sleep 1; } if (-not $found) { Write-Host 'Memux not found after 30 seconds.'; Remove-Job $job -Force }}"
+      ],
+      "dependsOn": ["Build Memux.App"],
+      "problemMatcher": [],
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": true,
+        "panel": "dedicated"
+      },
+      "options": {
+        "shell": {
+          "executable": "powershell.exe"
+        }
+      }
     }
   ]
 }

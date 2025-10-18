@@ -233,7 +233,6 @@ public sealed class GraphicsCaptureCapture : IDisposable
             Console.WriteLine("[GraphicsCapture] TryCaptureFrame: No frame available yet");
             return null;
         }
-        Console.WriteLine($"[GraphicsCapture] TryCaptureFrame: Returning {_lastWidth}x{_lastHeight}");
         return (_lastFrame, _lastWidth, _lastHeight);
     }
 

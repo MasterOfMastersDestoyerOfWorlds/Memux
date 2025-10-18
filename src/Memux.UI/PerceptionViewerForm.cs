@@ -12,6 +12,7 @@ public class PerceptionViewerForm : Form
     private readonly PictureBox _depthPicture;
     private readonly PictureBox _objectsPicture;
     private readonly PictureBox _ocrPicture;
+    private readonly PictureBox _ocrVisualizationPicture;
     private readonly Label _depthFpsLabel;
     private readonly Label _objectsFpsLabel;
     private readonly Label _ocrFpsLabel;
@@ -30,8 +31,6 @@ public class PerceptionViewerForm : Form
     private readonly TreeView _subskillsTree;
     private readonly Label _depthModelLbl;
     private readonly Label _objectsModelLbl;
-    private readonly Label _ocrModelLbl;
-    private readonly ListBox _ocrTextList;
     private readonly ListView _programsList;
     private readonly Button _refreshProgramsBtn;
     private readonly Button _launchProgramBtn;
@@ -86,6 +85,7 @@ public class PerceptionViewerForm : Form
         _depthPicture = CreatePictureBox();
         _objectsPicture = CreatePictureBox();
         _ocrPicture = CreatePictureBox();
+        _ocrVisualizationPicture = CreatePictureBox();
         
         _depthFpsLabel = new Label { Dock = DockStyle.Top, AutoSize = true, ForeColor = Color.Lime };
         _objectsFpsLabel = new Label { Dock = DockStyle.Top, AutoSize = true, ForeColor = Color.Lime };
@@ -95,11 +95,10 @@ public class PerceptionViewerForm : Form
         left.Controls.Add(WrapWithLabeledPanelAndFps("Objects", _objectsPicture, _objectsFpsLabel), 0, 1);
 
         var ocrSplit = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2 };
-        ocrSplit.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 70));
-        ocrSplit.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 30));
-        ocrSplit.Controls.Add(_ocrPicture, 0, 0);
-        _ocrTextList = new ListBox { Dock = DockStyle.Fill };
-        ocrSplit.Controls.Add(_ocrTextList, 1, 0);
+        ocrSplit.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
+        ocrSplit.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
+        ocrSplit.Controls.Add(_ocrPicture, 0, 0);  // Left: captured image with bounding boxes
+        ocrSplit.Controls.Add(_ocrVisualizationPicture, 1, 0);  // Right: spatial text viz
         left.Controls.Add(WrapWithLabeledPanelAndFps("OCR", ocrSplit, _ocrFpsLabel), 0, 2);
 
         var right = new TableLayoutPanel
@@ -209,9 +208,6 @@ public class PerceptionViewerForm : Form
         objectDownloadPanel.Controls.Add(_objectDownloadPb);
         objectDownloadPanel.Controls.Add(_objectDownloadLbl);
         goalsPanel.Controls.Add(objectDownloadPanel, 0, 7);
-
-        _ocrModelLbl = new Label { Text = "OCR model:", Dock = DockStyle.Top, AutoSize = true };
-        goalsPanel.Controls.Add(_ocrModelLbl, 0, 8);
 
         var planGroup = new GroupBox
         {
@@ -345,12 +341,13 @@ public class PerceptionViewerForm : Form
     {
         return new PictureBox
         {
+            Dock = DockStyle.Fill,
             SizeMode = PictureBoxSizeMode.Zoom,
             BackColor = Color.Black,
         };
     }
 
-    public void UpdatePerception(PerceptionState state, Bitmap? depthBitmap, Bitmap? objectsBitmap, Bitmap? ocrBitmap)
+    public void UpdatePerception(PerceptionState state, Bitmap? depthBitmap, Bitmap? objectsBitmap, Bitmap? ocrBitmap, Bitmap? ocrProcessedBitmap = null)
     {
         // Update header with focused program
         try
@@ -383,15 +380,18 @@ public class PerceptionViewerForm : Form
 
         SetPicture(_depthPicture, depthBitmap);
         SetPicture(_objectsPicture, objectsBitmap);
+
         SetPicture(_ocrPicture, ocrBitmap);
+        
+        
+        // Update OCR visualization
+        var ocrViz = CreateOcrVisualization(state.OcrResults, state.Width, state.Height);
+        SetPicture(_ocrVisualizationPicture, ocrViz);
         
         // Update FPS displays
         UpdateFpsDisplay(_depthFpsLabel, _depthFpsStopwatch, ref _depthLastTicks);
         UpdateFpsDisplay(_objectsFpsLabel, _objectsFpsStopwatch, ref _objectsLastTicks);
         UpdateFpsDisplay(_ocrFpsLabel, _ocrFpsStopwatch, ref _ocrLastTicks);
-        
-        // Update OCR text list
-        UpdateOcrText(state.OcrResults);
     }
 
     private static void UpdateFpsDisplay(Label label, System.Diagnostics.Stopwatch stopwatch, ref long lastTicks)
@@ -469,7 +469,7 @@ public class PerceptionViewerForm : Form
     {
         _depthModelLbl.Text = $"Depth model: {progress.DepthStatus}";
         _objectsModelLbl.Text = $"Objects model: {progress.ObjectsStatus}";
-        _ocrModelLbl.Text = $"OCR model: {progress.OcrStatus}";
+        // OCR model status removed per user request
     }
 
     private static void SetPicture(PictureBox pictureBox, Bitmap? newBitmap)
@@ -497,21 +497,56 @@ public class PerceptionViewerForm : Form
         return bmp;
     }
 
-    public void UpdateOcrText(List<OcrResult>? results)
+    private static Bitmap CreateOcrVisualization(List<OcrResult>? results, int width, int height)
     {
-        _ocrTextList.BeginUpdate();
-        _ocrTextList.Items.Clear();
-        if (results != null)
+        // Create blank background
+        int w = Math.Max(320, width > 0 ? width : 640);
+        int h = Math.Max(180, height > 0 ? height : 360);
+        var bmp = new Bitmap(w, h);
+        
+        using (var g = Graphics.FromImage(bmp))
         {
-            foreach (var r in results)
+            g.Clear(Color.Black);
+            g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+            g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.ClearTypeGridFit;
+            
+            if (results != null && width > 0 && height > 0)
             {
-                if (!string.IsNullOrWhiteSpace(r.Text))
+                foreach (var result in results)
                 {
-                    _ocrTextList.Items.Add(r.Text);
+                    if (string.IsNullOrWhiteSpace(result.Text)) continue;
+                    
+                    var bbox = result.BoundingBox;
+                    
+                    // Scale bounding box to visualization size
+                    float scaleX = w / (float)width;
+                    float scaleY = h / (float)height;
+                    float x = bbox.X * scaleX;
+                    float y = bbox.Y * scaleY;
+                    float boxW = bbox.Width * scaleX;
+                    float boxH = bbox.Height * scaleY;
+                    
+                    // Calculate font size based on bounding box height
+                    float fontSize = Math.Max(8, Math.Min(boxH * 0.8f, 72));
+                    
+                    using var font = new Font("Consolas", fontSize, FontStyle.Regular);
+                    using var brush = new SolidBrush(Color.White);
+                    
+                    // Draw text at the position scaled to match bounding box
+                    var rect = new RectangleF(x, y, boxW, boxH);
+                    var format = new StringFormat 
+                    { 
+                        Alignment = StringAlignment.Near,
+                        LineAlignment = StringAlignment.Near,
+                        FormatFlags = StringFormatFlags.NoWrap
+                    };
+                    
+                    g.DrawString(result.Text, font, brush, rect, format);
                 }
             }
         }
-        _ocrTextList.EndUpdate();
+        
+        return bmp;
     }
 
     private void RefreshPrograms()

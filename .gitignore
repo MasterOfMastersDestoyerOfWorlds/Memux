@@ -43,3 +43,6 @@ skill_library_backup/
 *.temp
 temp/
 
+memux-trace.nettrace
+memux-trace.speedscope.speedscope.json
+memux-trace.speedscope.speedscope.json

@@ -1,49 +1,28 @@
 using Memux.Perception;
-using System.Diagnostics;
+using Memux.Core;
 
 namespace Memux.Tests;
 
 /// <summary>
 /// Tests for Windows.Graphics.Capture integration
 /// Ensures DirectX game capture works even when windows are occluded
-/// NOTE: These tests require a windowed environment and may be skipped in headless/CI environments
 /// </summary>
 public class GraphicsCaptureTests
 {
+
     [Fact]
     public void GraphicsCaptureCapture_CanBeCreatedForNotepad()
     {
-        // Arrange: Launch notepad as a test window
-        var notepad = Process.Start(new ProcessStartInfo
-        {
-            FileName = "notepad.exe",
-            UseShellExecute = true
-        });
+        // Arrange: Launch notepad and attach to it (same pattern as production code)
+        var pm = new ProcessManager(@"C:\Windows\System32\notepad.exe");
+        pm.Launch();
+        Thread.Sleep(500); // Give notepad time to start
+        Assert.True(pm.AttachToExisting("notepad"));
 
         try
         {
-            // Wait for window to be ready and get handle
-            notepad.WaitForInputIdle(5000);
-            Thread.Sleep(1000); // Extra wait for window creation
-            notepad.Refresh();
-            
-            var hwnd = notepad.MainWindowHandle;
-            if (hwnd == IntPtr.Zero)
-            {
-                // Try to find window by process
-                for (int i = 0; i < 20 && hwnd == IntPtr.Zero; i++)
-                {
-                    Thread.Sleep(200);
-                    notepad.Refresh();
-                    hwnd = notepad.MainWindowHandle;
-                }
-            }
-            
-            // Skip test if we can't get a window handle (headless/CI environment)
-            if (hwnd == IntPtr.Zero)
-            {
-                return; // Skip test
-            }
+            var hwnd = pm.GetMainWindowHandle();
+            Assert.NotEqual(IntPtr.Zero, hwnd);
 
             // Act: Try to create Graphics Capture
             var capture = GraphicsCaptureCapture.TryCreateForWindow(hwnd);
@@ -51,30 +30,32 @@ public class GraphicsCaptureTests
             // Assert: Should succeed for a valid window
             Assert.NotNull(capture);
             
-            // Cleanup
+            // Cleanup capture
             capture.Dispose();
         }
         finally
         {
-            notepad?.Kill();
-            notepad?.WaitForExit(1000);
+            pm.Stop();
         }
     }
 
     [Fact]
     public void GraphicsCaptureCapture_CanCaptureFrameFromNotepad()
     {
-        // Arrange: Launch notepad
-        var notepad = Process.Start(new ProcessStartInfo
-        {
-            FileName = "notepad.exe",
-            UseShellExecute = true
-        });
+        // Arrange: Launch notepad and attach to it
+        var pm = new ProcessManager(@"C:\Windows\System32\notepad.exe");
+        pm.Launch();
+        Thread.Sleep(500);
+        Assert.True(pm.AttachToExisting("notepad"));
+
+        GraphicsCaptureCapture? capture = null;
 
         try
         {
-            notepad.WaitForInputIdle(5000);
-            var capture = GraphicsCaptureCapture.TryCreateForWindow(notepad.MainWindowHandle);
+            var hwnd = pm.GetMainWindowHandle();
+            Assert.NotEqual(IntPtr.Zero, hwnd);
+            
+            capture = GraphicsCaptureCapture.TryCreateForWindow(hwnd);
             Assert.NotNull(capture);
 
             // Act: Wait for first frame (up to 2 seconds)
@@ -90,14 +71,11 @@ public class GraphicsCaptureTests
             Assert.True(frame.Value.width > 0);
             Assert.True(frame.Value.height > 0);
             Assert.True(frame.Value.data.Length == frame.Value.width * frame.Value.height * 4);
-            
-            // Cleanup
-            capture.Dispose();
         }
         finally
         {
-            notepad?.Kill();
-            notepad?.WaitForExit(1000);
+            capture?.Dispose();
+            pm.Stop();
         }
     }
 
@@ -118,30 +96,15 @@ public class GraphicsCaptureTests
         // We can't easily test with Dark Souls in CI, but we can verify
         // that the code path exists and doesn't crash
         
-        // Arrange: Launch notepad (will be detected as needing standard capture)
-        var notepad = Process.Start(new ProcessStartInfo
-        {
-            FileName = "notepad.exe",
-            UseShellExecute = true
-        });
+        // Arrange: Launch notepad and attach to it
+        var pm = new ProcessManager(@"C:\Windows\System32\notepad.exe");
+        pm.Launch();
+        Thread.Sleep(500);
+        Assert.True(pm.AttachToExisting("notepad"));
 
         try
         {
-            notepad.WaitForInputIdle(5000);
-            Thread.Sleep(500);
-            notepad.Refresh();
-            
-            var hwnd = notepad.MainWindowHandle;
-            if (hwnd == IntPtr.Zero)
-            {
-                for (int i = 0; i < 10 && hwnd == IntPtr.Zero; i++)
-                {
-                    Thread.Sleep(100);
-                    notepad.Refresh();
-                    hwnd = notepad.MainWindowHandle;
-                }
-            }
-            
+            var hwnd = pm.GetMainWindowHandle();
             Assert.NotEqual(IntPtr.Zero, hwnd);
             
             var screenCapture = new ScreenCapture(hwnd);
@@ -157,8 +120,7 @@ public class GraphicsCaptureTests
         }
         finally
         {
-            notepad?.Kill();
-            notepad?.WaitForExit(1000);
+            pm.Stop();
         }
     }
 }

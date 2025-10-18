@@ -22,6 +22,19 @@
       "cwd": "${workspaceFolder}",
       "console": "externalTerminal",
       "stopAtEntry": false
+    },
+    {
+      "name": "Profile Memux with Flame Graph",
+      "type": "coreclr",
+      "request": "launch",
+      "preLaunchTask": "Profile: Start and Attach to Memux",
+      "program": "${workspaceFolder}/src/Memux.App/bin/Debug/net8.0-windows10.0.26100.0/Memux.App.dll",
+      "args": [],
+      "cwd": "${workspaceFolder}",
+      "console": "externalTerminal",
+      "stopAtEntry": false,
+      "noDebug": true,
+      "internalConsoleOptions": "neverOpen"
     }
   ]
 }

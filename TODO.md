@@ -23,6 +23,9 @@ Goal: Autonomous agent learns and executes programs through observation, skill a
 - [x] D3D11 staging copy → BGRA byte[] for pipeline integration
 - [x] Unit tests for Graphics Capture to prevent regressions
 - [x] Add FPS display to perception viewer for depth/objects/OCR
+- [x] OCR pane: split 50/50 with bounding box image (left) and spatial text visualization (right)
+- [x] Remove OCR model status from model panel
+- [x] Spatial text rendering scaled to bounding boxes
 - [ ] Handle cloaked/minimized windows (DWMWA_CLOAKED): pause capture until visible
 
 ## 2) Optional CV Signals (Upside Only)

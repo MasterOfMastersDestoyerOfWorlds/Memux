@@ -135,7 +135,7 @@ public class Phase3Tests
         var capture = new ScreenCapture(desktopHandle);
         var (data, width, height) = capture.CaptureFrame();
         
-        var results = ocrEngine.ExtractText(data, width, height);
+        var (results, processedImage, imgWidth, imgHeight) = ocrEngine.ExtractText(data, width, height);
         Assert.NotNull(results);
         Assert.Empty(results);
     }

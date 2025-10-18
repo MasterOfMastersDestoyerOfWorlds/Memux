@@ -7,28 +7,24 @@ using Memux.Perception;
 using Memux.Selection;
 using Memux.Curriculum;
 using Memux.UI;
-// using Memux.CodeGen;
 
 namespace Memux;
 
-/// <summary>
-/// Main entry point for Memux
-/// Demonstrates the full autonomous learning loop
-/// </summary>
+
+
+
+
 class Program
 {
     static async Task Main(string[] args)
     {
         Console.WriteLine("=== Memux: General Skill Acquisition System ===");
         Console.WriteLine();
-        // Ensure no stale instances are running that could lock assemblies
         KillOtherInstances();
-        
-        // Parse command line arguments
+
         string? gamePath = null;
         string? apiKey = null;
         string dbPath = "memux.db";
-        // Demo flags removed
         string? depthModel = null;
         string? objectModel = null;
         string? objectClasses = null;
@@ -37,10 +33,10 @@ class Program
         bool useGpu = true;
         string? steamPath = null;
         bool preflight = false;
-        string? programKey = null; // id or name from DB programs registry
+        string? programKey = null;
         bool noElevate = true;
         bool preflightLaunch = false;
-        
+
         for (int i = 0; i < args.Length; i++)
         {
             if (args[i] == "--game" && i + 1 < args.Length)
@@ -55,7 +51,7 @@ class Program
             {
                 dbPath = args[i + 1];
             }
-            // Demo flags removed
+
             else if (args[i] == "--depth-model" && i + 1 < args.Length)
             {
                 depthModel = args[i + 1];
@@ -101,14 +97,12 @@ class Program
                 preflightLaunch = true;
             }
         }
-        
-        // Resolve model paths from environment variables if not provided
+
         depthModel ??= Environment.GetEnvironmentVariable("MEMUX_DEPTH_MODEL");
         objectModel ??= Environment.GetEnvironmentVariable("MEMUX_OBJECT_MODEL");
         objectClasses ??= Environment.GetEnvironmentVariable("MEMUX_OBJECT_CLASSES");
         tessData ??= Environment.GetEnvironmentVariable("MEMUX_TESSDATA");
 
-        // Attempt default model discovery under ./models if still unset
         try
         {
             string baseDir = AppContext.BaseDirectory;
@@ -151,11 +145,9 @@ class Program
         }
         catch { }
 
-        // Check for API key in environment if not provided
         apiKey ??= Environment.GetEnvironmentVariable("OPENAI_API_KEY");
-        
-        // Demo paths removed
-        
+
+
         if (string.IsNullOrEmpty(apiKey))
         {
             Console.WriteLine("WARNING: No OpenAI API key provided.");
@@ -163,12 +155,11 @@ class Program
             Console.WriteLine("Set OPENAI_API_KEY environment variable or use --api-key argument.");
             Console.WriteLine();
         }
-        
+
         Console.WriteLine($"Database: {dbPath}");
         Console.WriteLine("Initializing Memux...");
         Console.WriteLine();
-        
-        // Elevation check with optional auto-relaunch
+
         if (!IsProcessElevated() && !noElevate)
         {
             try
@@ -189,114 +180,9 @@ class Program
                 Console.WriteLine("WARNING: Auto-elevation failed. Continue without admin or re-run in an elevated terminal.");
             }
         }
-
-        // Initialize system or preflight
-        if (preflight)
-        {
-            int exit = await RunPreflightAsync(dbPath, gamePath, programKey, steamPath, preflightLaunch);
-            Environment.Exit(exit);
-            return;
-        }
-        
-        await RunFullSystemAsync(dbPath, apiKey, gamePath, steamPath, depthModel, objectModel, objectClasses, tessData, useGpu, llmModel, programKey);
+        await RunFullSystemAsync(dbPath, apiKey, depthModel, objectModel, objectClasses, tessData, useGpu, llmModel, programKey);
     }
-    
-    // Demo method removed
-    
-    static async Task<int> RunPreflightAsync(string dbPath, string? gamePath, string? programKey, string? steamPath, bool preflightLaunch)
-    {
-        Console.WriteLine("Running preflight checks...\n");
-        int failures = 0;
-        try
-        {
-            // Resolve via DB registry
-            var db = new Memux.Core.Database.MemuxDatabase(dbPath);
-            var prog = !string.IsNullOrEmpty(programKey) ? db.GetProgramByNameOrId(programKey) : db.GetDefaultProgram();
-            if (prog != null) gamePath = prog.ExePath;
 
-            if (string.IsNullOrEmpty(gamePath) || !File.Exists(gamePath))
-            {
-                Console.WriteLine("[FAIL] Game executable path not found.");
-                Console.WriteLine("       Provide --program <name|id> registered in DB or --game <path>.");
-                failures++;
-            }
-            else
-            {
-                Console.WriteLine($"[OK] Game path: {gamePath}");
-            }
-
-            // Steam presence (optional, warn only)
-            steamPath ??= @"C:\\Program Files (x86)\\Steam\\Steam.exe";
-            if (!File.Exists(steamPath))
-            {
-                Console.WriteLine("[WARN] Steam not found at default path. Launch may still work.");
-            }
-            else
-            {
-                Console.WriteLine("[OK] Steam path found.");
-            }
-
-            // Elevation check
-            bool isAdmin = IsProcessElevated();
-            Console.WriteLine(isAdmin ? "[OK] Running as administrator." : "[WARN] Not running as administrator (SendInput may be unreliable)." );
-
-            // Window checks: attach or optional launch
-            IntPtr handle = IntPtr.Zero;
-            string processName = prog?.ProcessName ?? "UnknownProcess";
-            var existing = Process.GetProcessesByName(processName);
-            if (existing.Length > 0)
-            {
-                handle = existing[0].MainWindowHandle;
-            }
-            else if (preflightLaunch && !string.IsNullOrEmpty(gamePath) && File.Exists(gamePath))
-            {
-                Console.WriteLine("[INFO] Launching game for window checks...");
-                try
-                {
-                    var pm = new Memux.Core.ProcessManager(gamePath);
-                    if (pm.Launch())
-                    {
-                        handle = pm.GetMainWindowHandle();
-                    }
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine($"[WARN] Launch attempt failed: {ex.Message}");
-                }
-            }
-
-            if (handle == IntPtr.Zero)
-            {
-                Console.WriteLine("[WARN] Could not acquire window handle (game not running?). Skipping size/focus checks.");
-            }
-            else
-            {
-                WindowFocusHelper.TryFocusWindow(handle);
-                if (GetWindowRect(handle, out var rect))
-                {
-                    int width = rect.Right - rect.Left;
-                    int height = rect.Bottom - rect.Top;
-                    Console.WriteLine($"[OK] Window size: {width}x{height}");
-                    if (width != 1920 || height != 1080)
-                    {
-                        Console.WriteLine("[WARN] Window is not 1920x1080. Attempting non-invasive resize...");
-                        MoveWindow(handle, rect.Left, rect.Top, 1920, 1080, true);
-                    }
-                }
-                else
-                {
-                    Console.WriteLine("[WARN] Failed to query window rect.");
-                }
-            }
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"[FAIL] Preflight exception: {ex.Message}");
-            failures++;
-        }
-        Console.WriteLine($"\nPreflight completed with {(failures == 0 ? "no failures" : failures + " failure(s)")}.\n");
-        return failures == 0 ? 0 : 1;
-    }
 
     private static bool IsProcessElevated()
     {
@@ -315,8 +201,6 @@ class Program
     static async Task RunFullSystemAsync(
         string dbPath,
         string? apiKey,
-        string? gamePath,
-        string? steamPath,
         string? depthModel,
         string? objectModel,
         string? objectClasses,
@@ -325,42 +209,19 @@ class Program
         string? llmModel,
         string? programKey)
     {
-        // Initialize components
         var skillLibrary = new SkillLibrary(dbPath);
         await skillLibrary.CreateSeedSkillsAsync();
-        
-        // var notificationManager = new NotificationManager();
-        
-        // Set defaults if not provided
-        steamPath ??= @"C:\\Program Files (x86)\\Steam\\Steam.exe";
-        // Resolve program via DB registry if provided / available
+
+
         var db = new Memux.Core.Database.MemuxDatabase(dbPath);
         var prog = !string.IsNullOrEmpty(programKey) ? db.GetProgramByNameOrId(programKey) : db.GetDefaultProgram();
-        if (prog != null)
-        {
-            gamePath = prog.ExePath;
-        }
-        
-        // Default to Steam applaunch if no path provided or registry not set
-        if (string.IsNullOrEmpty(gamePath))
-        {
-            gamePath = @"C:\\Program Files (x86)\\Steam\\steam.exe";
-            if (prog != null && string.IsNullOrEmpty(prog.LaunchArgs))
-            {
-                // ensure default applaunch is present when using steam.exe
-                prog.LaunchArgs = "-applaunch 570940";
-            }
-        }
-        
-        // Ensure Steam is running before attempting to attach/launch DSR
-        EnsureSteamRunning(steamPath);
-        
-        // Show UI immediately; start capture from desktop until user launches a program
+
+
         var cancellationToken = new CancellationTokenSource();
         PerceptionViewer.Closed += (_, __) =>
         {
             try { cancellationToken.Cancel(); } catch { }
-            // On UI close, kill any spawned programs and revert capture
+
             try
             {
                 foreach (var pid in Memux.UI.PerceptionViewer.SpawnedPids)
@@ -379,18 +240,18 @@ class Program
             }
             catch { }
         };
-        
-        // Create model manager for Depth/Object model management
+
+
         var modelManager = new ModelManager();
         PerceptionViewer.Show(modelManager);
-        
+
         var desktopHandle = GetDesktopWindow();
         if (desktopHandle == IntPtr.Zero)
         {
             Console.WriteLine("ERROR: Could not acquire desktop window handle.");
             return;
         }
-        
+
         var perception = new PerceptionPipeline(
             desktopHandle,
             depthModel,
@@ -416,53 +277,52 @@ class Program
             }
             catch { }
         };
-        
+
         Console.WriteLine("Viewer started. Launch a program from the Programs panel to focus capture.");
         var contextAnalyzer = new ContextAnalyzer();
         var executor = new ActionExecutor();
-        
-        // Initialize skill selector (uses LLM if model path provided, otherwise rules)
+
+
         using var selector = new SkillSelector(llmModel ?? string.Empty, skillLibrary, useCache: true);
-        
-        // Viewer is already shown above
-        
-        // Initialize curriculum if API key available
+
+
+
+
         CurriculumAgent? curriculum = null;
         if (!string.IsNullOrEmpty(apiKey))
         {
             curriculum = new CurriculumAgent(apiKey);
-            curriculum.GoalCreated += (s, e) => 
+            curriculum.GoalCreated += (s, e) =>
                 Console.WriteLine($"[Curriculum] New goal: {e.Goal.Description}");
-            curriculum.GoalCompleted += (s, e) => 
+            curriculum.GoalCompleted += (s, e) =>
                 Console.WriteLine($"[Curriculum] Completed: {e.Goal.Description}");
-            
+
             var goals = await curriculum.GenerateInitialGoalsAsync($"Starting with {prog?.Name ?? "target program"}");
             Console.WriteLine($"Generated {goals.Count} initial goals");
         }
-        
+
         Console.WriteLine("Starting main loop... (will stop on process exit)");
         Console.WriteLine();
-        
-        // Main loop
+
+
         Console.CancelKeyPress += (s, e) => { e.Cancel = true; cancellationToken.Cancel(); };
         AppDomain.CurrentDomain.ProcessExit += (s, e) => { try { cancellationToken.Cancel(); } catch { } };
-        
+
         int frameCount = 0;
         var lastSecond = DateTime.UtcNow;
         int blankFrames = 0;
-        
+
         try
         {
             while (!cancellationToken.Token.IsCancellationRequested)
             {
                 try
                 {
-                    // Capture perception (includes CV if models configured)
+
                     var state = perception.CaptureAndProcess();
-                    // Stamp focused program for scoping
                     state.FocusedProgram = focusedProgramName ?? prog?.Name;
-                    
-                    // If capture failed (e.g., window not ready), skip this frame
+
+
                     if (state.Width <= 0 || state.Height <= 0 || state.ScreenData == null || state.ScreenData.Length == 0)
                     {
                         blankFrames++;
@@ -474,37 +334,27 @@ class Program
                         await Task.Delay(16);
                         continue;
                     }
-                    else if (IsProbablyAllBlack(state.ScreenData))
-                    {
-                        blankFrames++;
-                        if (blankFrames >= 10)
-                        {
-                            TryReacquireWindowHandle(perception, prog?.ProcessName);
-                            blankFrames = 0;
-                        }
-                    }
                     else
                     {
                         blankFrames = 0;
                     }
-                    
-                    // Analyze context
+
                     var context = contextAnalyzer.AnalyzeContext(state);
 
-                    // Select next planned skill (uses local LLM if available, else rules)
+
                     var planned = await selector.SelectSkillAsync(state, curriculum?.GetCurrentGoal());
                     string? nextSkillName = planned?.Name;
                     var subskillLines = BuildDependencyTreeLines(planned, skillLibrary, 0, new HashSet<string>());
 
-                    // Push updates to viewer (use current goal if available)
+
                     var currentGoal = curriculum?.GetCurrentGoal();
                     PerceptionViewer.Update(state, currentGoal, nextSkillName, subskillLines);
 
-                    // Execute the selected skill if available
+
                     var chosen = planned ?? (await skillLibrary.GetTopSkillsAsync(1)).FirstOrDefault();
                     if (chosen != null && chosen.Execute != null)
                     {
-                        // Inject runtime subskill invoker for call graph (if we later decide to use it)
+
                         chosen.InvokeSubskill = (subskillName, s) =>
                         {
                             var target = skillLibrary.GetAllSkills().FirstOrDefault(x => x.Name.Equals(subskillName, StringComparison.OrdinalIgnoreCase));
@@ -520,16 +370,16 @@ class Program
                 {
                     Console.WriteLine($"[Loop] Error: {ex.Message}");
                 }
-                
-                // Frame timing
+
+
                 frameCount++;
                 if ((DateTime.UtcNow - lastSecond).TotalSeconds >= 1.0)
                 {
                     lastSecond = DateTime.UtcNow;
                     frameCount = 0;
                 }
-                
-                // Target ~60 FPS
+
+
                 await Task.Delay(16, cancellationToken.Token);
             }
         }
@@ -542,11 +392,11 @@ class Program
             perception.Dispose();
             PerceptionViewer.Close();
             curriculum?.Dispose();
-            // Kill other stale instances to avoid file locks during next build
+
             KillOtherInstances();
             try { cancellationToken.Dispose(); } catch { }
         }
-        
+
         Console.WriteLine("Memux stopped.");
     }
 
@@ -588,125 +438,8 @@ class Program
         catch { }
     }
 
-    private static void EnsureSteamRunning(string? steamPath)
-    {
-        try
-        {
-            const string steamProcessName = "Steam";
-            // If Steam process exists, nothing to do
-            var processes = System.Diagnostics.Process.GetProcessesByName(steamProcessName);
-            if (processes.Length > 0)
-            {
-                Console.WriteLine("Steam is already running.");
-                return;
-            }
-            
-            // Determine path
-            steamPath ??= @"C:\\Program Files (x86)\\Steam\\Steam.exe";
-            if (!File.Exists(steamPath))
-            {
-                Console.WriteLine($"Warning: Steam executable not found at {steamPath}. Proceeding without ensuring Steam.");
-                return;
-            }
-            
-            Console.WriteLine("Starting Steam...");
-            var startInfo = new System.Diagnostics.ProcessStartInfo
-            {
-                FileName = steamPath,
-                WorkingDirectory = Path.GetDirectoryName(steamPath),
-                UseShellExecute = true
-            };
-            var process = System.Diagnostics.Process.Start(startInfo);
-            if (process == null)
-            {
-                Console.WriteLine("Warning: Failed to start Steam.");
-                return;
-            }
-            
-            // Wait a few seconds for Steam to initialize
-            for (int i = 0; i < 50; i++)
-            {
-                if (process.HasExited)
-                {
-                    break;
-                }
-                var any = System.Diagnostics.Process.GetProcessesByName(steamProcessName).Length > 0;
-                if (any)
-                {
-                    Console.WriteLine("Steam started.");
-                    return;
-                }
-                Thread.Sleep(200);
-            }
-            Console.WriteLine("Warning: Steam did not become ready in time; continuing.");
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"Warning: EnsureSteamRunning error: {ex.Message}");
-        }
-    }
-
-    private static bool LaunchProgramViaSteam(string? steamPath, string launchArgs)
-    {
-        try
-        {
-            // Prefer launching through Steam so Steamworks initializes properly
-            // Approach 1: steam.exe -applaunch 570940
-            steamPath ??= @"C:\\Program Files (x86)\\Steam\\Steam.exe";
-            if (File.Exists(steamPath))
-            {
-                var startInfo = new System.Diagnostics.ProcessStartInfo
-                {
-                    FileName = steamPath,
-                    Arguments = "-applaunch 570940",
-                    WorkingDirectory = Path.GetDirectoryName(steamPath),
-                    UseShellExecute = true
-                };
-                var proc = System.Diagnostics.Process.Start(startInfo);
-                return proc != null;
-            }
-            
-            // Approach 2: steam protocol (if steamPath missing)
-            var protoInfo = new System.Diagnostics.ProcessStartInfo
-            {
-                FileName = "steam://rungameid/570940",
-                UseShellExecute = true
-            };
-            var protoProc = System.Diagnostics.Process.Start(protoInfo);
-            return protoProc != null;
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"Warning: Failed to launch via Steam: {ex.Message}");
-            return false;
-        }
-    }
-
     [System.Runtime.InteropServices.DllImport("user32.dll")]
     private static extern IntPtr GetDesktopWindow();
-
-    private static bool IsProbablyAllBlack(byte[] data)
-    {
-        try
-        {
-            if (data == null || data.Length < 16) return true;
-            int nonBlack = 0;
-            int step = Math.Max(4, data.Length / 4096);
-            for (int i = 0; i < data.Length; i += step)
-            {
-                byte b = data[i];
-                byte g = (i + 1) < data.Length ? data[i + 1] : (byte)0;
-                byte r = (i + 2) < data.Length ? data[i + 2] : (byte)0;
-                if (b > 2 || g > 2 || r > 2)
-                {
-                    nonBlack++;
-                    if (nonBlack > 32) return false;
-                }
-            }
-            return true;
-        }
-        catch { return false; }
-    }
 
     private static void TryReacquireWindowHandle(Memux.Perception.PerceptionPipeline perception, string? processName)
     {
