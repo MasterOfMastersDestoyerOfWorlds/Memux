@@ -13,7 +13,7 @@ public class PerceptionPipeline : IDisposable
     private readonly ScreenCapture _screenCapture;
     private readonly DepthEstimator? _depthEstimator;
     private readonly ObjectDetector? _objectDetector;
-    private readonly OcrEngine? _ocrEngine;
+    private readonly BackgroundOcrEngine? _ocrEngine;
 
     private DateTime _lastCaptureTime;
     private int _frameCount;
@@ -41,7 +41,7 @@ public class PerceptionPipeline : IDisposable
 
         // Initialize OCR engine - use provided path or default to ./tessdata
         string ocrPath = !string.IsNullOrEmpty(tessDataPath) ? tessDataPath : "./tessdata";
-        _ocrEngine = new OcrEngine(ocrPath);
+        _ocrEngine = new BackgroundOcrEngine(ocrPath);
     }
 
     /// <summary>
@@ -81,17 +81,18 @@ public class PerceptionPipeline : IDisposable
 
             if (_ocrEngine != null)
             {
-                tasks.Add(Task.Run(() =>
-                {
-                    var (results, processedImage, imgWidth, imgHeight) = _ocrEngine.ExtractText(data, width, height);
-                    state.OcrResults = results;
-                    state.OcrProcessedImage = processedImage;
-                    state.OcrProcessedImageWidth = imgWidth;
-                    state.OcrProcessedImageHeight = imgHeight;
-                }));
+                // Submit frame for background processing (non-blocking)
+                _ocrEngine.SubmitFrame(data, width, height);
+                
+                // Get cached results immediately (non-blocking)
+                var (results, processedImage, imgWidth, imgHeight) = _ocrEngine.GetResults();
+                state.OcrResults = results;
+                state.OcrProcessedImage = processedImage;
+                state.OcrProcessedImageWidth = imgWidth;
+                state.OcrProcessedImageHeight = imgHeight;
             }
             
-            // Wait for all CV tasks to complete
+            // Wait for all CV tasks to complete (OCR now non-blocking)
             Task.WaitAll(tasks.ToArray());
             
             _frameCount++;
@@ -152,6 +153,7 @@ public class PerceptionPipeline : IDisposable
     public void UpdateWindowHandle(IntPtr windowHandle)
     {
         _screenCapture.SetWindowHandle(windowHandle);
+        _ocrEngine?.Reset();
     }
 }
 

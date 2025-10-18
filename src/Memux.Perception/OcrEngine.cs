@@ -29,7 +29,23 @@ public class OcrEngine : IDisposable
 
         try
         {
-            _engine = new TesseractEngine(tessDataPath, "eng", EngineMode.Default);
+            // Redirect console output to suppress Tesseract's "Estimating resolution" messages
+            var originalOut = Console.Out;
+            var originalError = Console.Error;
+            
+            try
+            {
+                Console.SetOut(System.IO.TextWriter.Null);
+                Console.SetError(System.IO.TextWriter.Null);
+                
+                _engine = new TesseractEngine(tessDataPath, "eng", EngineMode.Default);
+            }
+            finally
+            {
+                Console.SetOut(originalOut);
+                Console.SetError(originalError);
+            }
+            
             Console.WriteLine("OCR engine loaded");
         }
         catch (Exception ex)
@@ -52,7 +68,22 @@ public class OcrEngine : IDisposable
             using var img = Pix.Create(width, height, 32);
             System.Runtime.InteropServices.Marshal.Copy(rgbaData, 0, img.GetData().Data, rgbaData.Length);
 
-            using var page = _engine.Process(img, PageSegMode.SparseText);
+            // Suppress Tesseract console output
+            var originalOut = Console.Out;
+            var originalError = Console.Error;
+            Page? page = null;
+            
+            try
+            {
+                Console.SetOut(System.IO.TextWriter.Null);
+                Console.SetError(System.IO.TextWriter.Null);
+                page = _engine.Process(img);
+            }
+            finally
+            {
+                Console.SetOut(originalOut);
+                Console.SetError(originalError);
+            }
 
             var stopwatch = Stopwatch.StartNew();
             var results = new List<OcrResult>();
@@ -87,12 +118,87 @@ public class OcrEngine : IDisposable
             } while (iter.Next(PageIteratorLevel.Word));
 
             // Return the processed image data along with results
+            page?.Dispose();
             return (results, rgbaData, width, height);
         }
         catch (Exception ex)
         {
             Console.WriteLine($"OCR error: {ex.Message}");
             return (new List<OcrResult>(), null, width, height);
+        }
+    }
+
+    /// <summary>
+    /// Extract text from a specific region of an image
+    /// </summary>
+    public List<OcrResult> ExtractTextFromRegion(byte[] rgbaData, System.Drawing.Rectangle region, int fullWidth, int fullHeight)
+    {
+        if (_engine == null)
+            return new List<OcrResult>();
+
+        try
+        {
+            // Crop to region
+            var croppedData = CropRegion(rgbaData, fullWidth, fullHeight, region.X, region.Y, region.Width, region.Height);
+            
+            // Process the cropped region
+            using var img = Pix.Create(region.Width, region.Height, 32);
+            System.Runtime.InteropServices.Marshal.Copy(croppedData, 0, img.GetData().Data, croppedData.Length);
+
+            // Suppress Tesseract console output
+            var originalOut = Console.Out;
+            var originalError = Console.Error;
+            Page? page = null;
+            
+            try
+            {
+                Console.SetOut(System.IO.TextWriter.Null);
+                Console.SetError(System.IO.TextWriter.Null);
+                page = _engine.Process(img, PageSegMode.SparseText);
+            }
+            finally
+            {
+                Console.SetOut(originalOut);
+                Console.SetError(originalError);
+            }
+            
+            var results = new List<OcrResult>();
+            using var iter = page.GetIterator();
+            iter.Begin();
+
+            do
+            {
+                if (iter.TryGetBoundingBox(PageIteratorLevel.Word, out var bounds))
+                {
+                    string word = iter.GetText(PageIteratorLevel.Word);
+                    float confidence = iter.GetConfidence(PageIteratorLevel.Word) / 100f;
+
+                    if (confidence > 0.5f && !string.IsNullOrWhiteSpace(word))
+                    {
+                        // Adjust bounding box coordinates to full image space
+                        results.Add(new OcrResult
+                        {
+                            Text = word.Trim(),
+                            Confidence = confidence,
+                            BoundingBox = new BoundingBox
+                            {
+                                X = region.X + bounds.X1,
+                                Y = region.Y + bounds.Y1,
+                                Width = bounds.X2 - bounds.X1,
+                                Height = bounds.Y2 - bounds.Y1
+                            }
+                        });
+                    }
+                }
+            } while (iter.Next(PageIteratorLevel.Word));
+
+            page?.Dispose();
+            return results;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"OCR region error: {ex.Message}");
+            return new List<OcrResult>();
         }
     }
 

@@ -27,6 +27,9 @@ Goal: Autonomous agent learns and executes programs through observation, skill a
 - [x] Remove OCR model status from model panel
 - [x] Spatial text rendering scaled to bounding boxes
 - [ ] Handle cloaked/minimized windows (DWMWA_CLOAKED): pause capture until visible
+- [x] Suppress Tesseract "Estimating resolution" console output
+- [x] Fix ZoomablePictureBox default zoom to fit-to-view (corners at edges)
+- [x] Move zoom percentage display to label layer (not on image)
 
 ## 2) Optional CV Signals (Upside Only)
 - [ ] Depth: MiDaS small (models/midas_small.onnx) — normalize [0,1]

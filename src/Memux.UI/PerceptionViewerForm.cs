@@ -16,6 +16,9 @@ public class PerceptionViewerForm : Form
     private readonly Label _depthFpsLabel;
     private readonly Label _objectsFpsLabel;
     private readonly Label _ocrFpsLabel;
+    private readonly Label _depthZoomLabel;
+    private readonly Label _objectsZoomLabel;
+    private readonly Label _ocrZoomLabel;
     private readonly Label _goalLabel;
     
     // FPS tracking
@@ -90,16 +93,20 @@ public class PerceptionViewerForm : Form
         _depthFpsLabel = new Label { Dock = DockStyle.Top, AutoSize = true, ForeColor = Color.Lime };
         _objectsFpsLabel = new Label { Dock = DockStyle.Top, AutoSize = true, ForeColor = Color.Lime };
         _ocrFpsLabel = new Label { Dock = DockStyle.Top, AutoSize = true, ForeColor = Color.Lime };
+        
+        _depthZoomLabel = new Label { Dock = DockStyle.Top, AutoSize = true, ForeColor = Color.Cyan };
+        _objectsZoomLabel = new Label { Dock = DockStyle.Top, AutoSize = true, ForeColor = Color.Cyan };
+        _ocrZoomLabel = new Label { Dock = DockStyle.Top, AutoSize = true, ForeColor = Color.Cyan };
 
-        left.Controls.Add(WrapWithLabeledPanelAndFps("Depth Map", _depthPicture, _depthFpsLabel), 0, 0);
-        left.Controls.Add(WrapWithLabeledPanelAndFps("Objects", _objectsPicture, _objectsFpsLabel), 0, 1);
+        left.Controls.Add(WrapWithLabeledPanelAndFps("Depth Map", _depthPicture, _depthFpsLabel, _depthZoomLabel), 0, 0);
+        left.Controls.Add(WrapWithLabeledPanelAndFps("Objects", _objectsPicture, _objectsFpsLabel, _objectsZoomLabel), 0, 1);
 
         var ocrSplit = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2 };
         ocrSplit.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
         ocrSplit.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
         ocrSplit.Controls.Add(_ocrPicture, 0, 0);  // Left: captured image with bounding boxes
         ocrSplit.Controls.Add(_ocrVisualizationPicture, 1, 0);  // Right: spatial text viz
-        left.Controls.Add(WrapWithLabeledPanelAndFps("OCR", ocrSplit, _ocrFpsLabel), 0, 2);
+        left.Controls.Add(WrapWithLabeledPanelAndFps("OCR", ocrSplit, _ocrFpsLabel, _ocrZoomLabel), 0, 2);
 
         var right = new TableLayoutPanel
         {
@@ -325,13 +332,18 @@ public class PerceptionViewerForm : Form
         return container;
     }
 
-    private static Control WrapWithLabeledPanelAndFps(string title, Control child, Label fpsLabel)
+    private static Control WrapWithLabeledPanelAndFps(string title, Control child, Label fpsLabel, Label? zoomLabel = null)
     {
         var container = new Panel { Dock = DockStyle.Fill, Padding = new Padding(6) };
         var titleLabel = new Label { Text = title, Dock = DockStyle.Top, AutoSize = true };
         container.Controls.Add(titleLabel);
         fpsLabel.Dock = DockStyle.Top;
         container.Controls.Add(fpsLabel);
+        if (zoomLabel != null)
+        {
+            zoomLabel.Dock = DockStyle.Top;
+            container.Controls.Add(zoomLabel);
+        }
         child.Dock = DockStyle.Fill;
         container.Controls.Add(child);
         return container;
@@ -339,10 +351,9 @@ public class PerceptionViewerForm : Form
 
     private static PictureBox CreatePictureBox()
     {
-        return new PictureBox
+        return new ZoomablePictureBox
         {
             Dock = DockStyle.Fill,
-            SizeMode = PictureBoxSizeMode.Zoom,
             BackColor = Color.Black,
         };
     }
@@ -392,6 +403,11 @@ public class PerceptionViewerForm : Form
         UpdateFpsDisplay(_depthFpsLabel, _depthFpsStopwatch, ref _depthLastTicks);
         UpdateFpsDisplay(_objectsFpsLabel, _objectsFpsStopwatch, ref _objectsLastTicks);
         UpdateFpsDisplay(_ocrFpsLabel, _ocrFpsStopwatch, ref _ocrLastTicks);
+        
+        // Update Zoom displays
+        UpdateZoomDisplay(_depthZoomLabel, _depthPicture);
+        UpdateZoomDisplay(_objectsZoomLabel, _objectsPicture);
+        UpdateZoomDisplay(_ocrZoomLabel, _ocrPicture);
     }
 
     private static void UpdateFpsDisplay(Label label, System.Diagnostics.Stopwatch stopwatch, ref long lastTicks)
@@ -404,6 +420,18 @@ public class PerceptionViewerForm : Form
         {
             var fps = System.Diagnostics.Stopwatch.Frequency / (double)deltaTicks;
             label.Text = $"FPS: {fps:F1}";
+        }
+    }
+
+    private static void UpdateZoomDisplay(Label label, PictureBox pictureBox)
+    {
+        if (pictureBox is ZoomablePictureBox zoomable)
+        {
+            label.Text = $"Zoom: {zoomable.ZoomLevel * 100:F0}%";
+        }
+        else
+        {
+            label.Text = "Zoom: 100%";
         }
     }
 
