@@ -11,6 +11,8 @@ namespace Memux.Perception;
 public partial class ScreenCapture
 {
     private IntPtr _windowHandle;
+    private DesktopDuplicationCapture? _duplication;
+    private GraphicsCaptureCapture? _graphicsCapture;
     // GDI-based capture optimized for console applications
     
     public ScreenCapture(IntPtr windowHandle)
@@ -36,6 +38,16 @@ public partial class ScreenCapture
 		// Prefer child capture first for those processes
 		var procName = GetProcessNameForWindow(_windowHandle);
 		bool preferChildCapture = IsDirectXGameNeedingChildCapture(procName);
+		
+        // Method 0: Windows.Graphics.Capture - captures window even when occluded (behind other windows)
+        // This is the modern replacement for DLL injection-based game capture
+        if (preferChildCapture)
+        {
+            _graphicsCapture ??= GraphicsCaptureCapture.TryCreateForWindow(_windowHandle);
+            var gc = _graphicsCapture?.TryCaptureFrame();
+            if (gc != null) return gc.Value;
+        }
+		
 		if (preferChildCapture)
 		{
 			var childResult = TryChildWindowCapture(lenientBlackCheck: true);
@@ -43,8 +55,8 @@ public partial class ScreenCapture
 			var altResult = TryPrintWindowCapture(alternateFlags: true, lenientBlackCheck: true);
 			if (altResult != null) return altResult.Value;
 		}
-        
-		// Method 1: Try PrintWindow first (most reliable for DirectX games)
+
+        // Method 1: Try PrintWindow first (most reliable for DirectX games)
 		var printWindowResult = TryPrintWindowCapture();
         if (printWindowResult != null) return printWindowResult.Value;
         
@@ -109,6 +121,9 @@ public partial class ScreenCapture
     [DllImport("dwmapi.dll")]
     private static extern int DwmGetWindowAttribute(IntPtr hwnd, int dwAttribute, out RECT pvAttribute, int cbAttribute);
     private const int DWMWA_EXTENDED_FRAME_BOUNDS = 9;
+    
+    [DllImport("dwmapi.dll")]
+    private static extern int DwmFlush();
     
     [DllImport("user32.dll")]
     private static extern int GetSystemMetrics(int nIndex);
@@ -327,6 +342,8 @@ public partial class ScreenCapture
                     using var bmp = new System.Drawing.Bitmap(width, height, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
                     using (var g = System.Drawing.Graphics.FromImage(bmp))
                     {
+                        // Ensure latest composition state
+                        try { DwmFlush(); } catch { }
                         g.CopyFromScreen(wrect.Left, wrect.Top, 0, 0, new System.Drawing.Size(width, height), System.Drawing.CopyPixelOperation.SourceCopy);
                     }
                     
@@ -336,8 +353,8 @@ public partial class ScreenCapture
                     byte[] buffer = new byte[bytes];
                     System.Runtime.InteropServices.Marshal.Copy(bmpData.Scan0, buffer, 0, bytes);
                     bmp.UnlockBits(bmpData);
-                    
-                    if (!IsMostlyBlack(buffer)) return (buffer, width, height);
+                    // For composition capture, do not discard dark frames
+                    return (buffer, width, height);
                 }
             }
             
@@ -352,6 +369,7 @@ public partial class ScreenCapture
                     using var bmp = new System.Drawing.Bitmap(width, height, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
                     using (var g = System.Drawing.Graphics.FromImage(bmp))
                     {
+                        try { DwmFlush(); } catch { }
                         g.CopyFromScreen(wrect2.Left, wrect2.Top, 0, 0, new System.Drawing.Size(width, height), System.Drawing.CopyPixelOperation.SourceCopy);
                     }
                     
@@ -361,8 +379,8 @@ public partial class ScreenCapture
                     byte[] buffer = new byte[bytes];
                     System.Runtime.InteropServices.Marshal.Copy(bmpData.Scan0, buffer, 0, bytes);
                     bmp.UnlockBits(bmpData);
-                    
-                    if (!IsMostlyBlack(buffer)) return (buffer, width, height);
+                    // Return buffer regardless of darkness
+                    return (buffer, width, height);
                 }
             }
             

@@ -17,11 +17,13 @@ Goal: Autonomous agent learns and executes programs through observation, skill a
 ## 1) Perception Baseline (Works Without Models)
 - [ ] Verify BitBlt capture loop at ≥60 FPS (quick mode)
 - [ ] Implement lightweight HUD heuristics (health bar pixel scan)
-- [ ] Add color-threshold regions for “You Died”/menu prompts
+- [ ] Add color-threshold regions for "You Died"/menu prompts
 - [ ] Wire minimal PerceptionState (screen only) into selection
-- [ ] Add Windows.Graphics.Capture window capture path (prefer for focused HWND)
+- [x] Add Windows.Graphics.Capture window capture path (prefer for focused HWND)
+- [x] D3D11 staging copy → BGRA byte[] for pipeline integration
+- [x] Unit tests for Graphics Capture to prevent regressions
+- [x] Add FPS display to perception viewer for depth/objects/OCR
 - [ ] Handle cloaked/minimized windows (DWMWA_CLOAKED): pause capture until visible
-- [ ] D3D11 staging copy → BGRA byte[] for pipeline integration
 
 ## 2) Optional CV Signals (Upside Only)
 - [ ] Depth: MiDaS small (models/midas_small.onnx) — normalize [0,1]

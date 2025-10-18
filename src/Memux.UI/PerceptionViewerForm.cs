@@ -12,7 +12,18 @@ public class PerceptionViewerForm : Form
     private readonly PictureBox _depthPicture;
     private readonly PictureBox _objectsPicture;
     private readonly PictureBox _ocrPicture;
+    private readonly Label _depthFpsLabel;
+    private readonly Label _objectsFpsLabel;
+    private readonly Label _ocrFpsLabel;
     private readonly Label _goalLabel;
+    
+    // FPS tracking
+    private readonly System.Diagnostics.Stopwatch _depthFpsStopwatch = System.Diagnostics.Stopwatch.StartNew();
+    private readonly System.Diagnostics.Stopwatch _objectsFpsStopwatch = System.Diagnostics.Stopwatch.StartNew();
+    private readonly System.Diagnostics.Stopwatch _ocrFpsStopwatch = System.Diagnostics.Stopwatch.StartNew();
+    private long _depthLastTicks;
+    private long _objectsLastTicks;
+    private long _ocrLastTicks;
     private readonly ProgressBar _goalProgress;
     private readonly ListBox _subGoalsList;
     private readonly Label _nextSkillLabel;
@@ -75,9 +86,13 @@ public class PerceptionViewerForm : Form
         _depthPicture = CreatePictureBox();
         _objectsPicture = CreatePictureBox();
         _ocrPicture = CreatePictureBox();
+        
+        _depthFpsLabel = new Label { Dock = DockStyle.Top, AutoSize = true, ForeColor = Color.Lime };
+        _objectsFpsLabel = new Label { Dock = DockStyle.Top, AutoSize = true, ForeColor = Color.Lime };
+        _ocrFpsLabel = new Label { Dock = DockStyle.Top, AutoSize = true, ForeColor = Color.Lime };
 
-        left.Controls.Add(WrapWithLabeledPanel("Depth Map", _depthPicture), 0, 0);
-        left.Controls.Add(WrapWithLabeledPanel("Objects", _objectsPicture), 0, 1);
+        left.Controls.Add(WrapWithLabeledPanelAndFps("Depth Map", _depthPicture, _depthFpsLabel), 0, 0);
+        left.Controls.Add(WrapWithLabeledPanelAndFps("Objects", _objectsPicture, _objectsFpsLabel), 0, 1);
 
         var ocrSplit = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2 };
         ocrSplit.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 70));
@@ -85,7 +100,7 @@ public class PerceptionViewerForm : Form
         ocrSplit.Controls.Add(_ocrPicture, 0, 0);
         _ocrTextList = new ListBox { Dock = DockStyle.Fill };
         ocrSplit.Controls.Add(_ocrTextList, 1, 0);
-        left.Controls.Add(WrapWithLabeledPanel("OCR", ocrSplit), 0, 2);
+        left.Controls.Add(WrapWithLabeledPanelAndFps("OCR", ocrSplit, _ocrFpsLabel), 0, 2);
 
         var right = new TableLayoutPanel
         {
@@ -314,6 +329,18 @@ public class PerceptionViewerForm : Form
         return container;
     }
 
+    private static Control WrapWithLabeledPanelAndFps(string title, Control child, Label fpsLabel)
+    {
+        var container = new Panel { Dock = DockStyle.Fill, Padding = new Padding(6) };
+        var titleLabel = new Label { Text = title, Dock = DockStyle.Top, AutoSize = true };
+        container.Controls.Add(titleLabel);
+        fpsLabel.Dock = DockStyle.Top;
+        container.Controls.Add(fpsLabel);
+        child.Dock = DockStyle.Fill;
+        container.Controls.Add(child);
+        return container;
+    }
+
     private static PictureBox CreatePictureBox()
     {
         return new PictureBox
@@ -358,8 +385,26 @@ public class PerceptionViewerForm : Form
         SetPicture(_objectsPicture, objectsBitmap);
         SetPicture(_ocrPicture, ocrBitmap);
         
+        // Update FPS displays
+        UpdateFpsDisplay(_depthFpsLabel, _depthFpsStopwatch, ref _depthLastTicks);
+        UpdateFpsDisplay(_objectsFpsLabel, _objectsFpsStopwatch, ref _objectsLastTicks);
+        UpdateFpsDisplay(_ocrFpsLabel, _ocrFpsStopwatch, ref _ocrLastTicks);
+        
         // Update OCR text list
         UpdateOcrText(state.OcrResults);
+    }
+
+    private static void UpdateFpsDisplay(Label label, System.Diagnostics.Stopwatch stopwatch, ref long lastTicks)
+    {
+        var currentTicks = stopwatch.ElapsedTicks;
+        var deltaTicks = currentTicks - lastTicks;
+        lastTicks = currentTicks;
+        
+        if (deltaTicks > 0)
+        {
+            var fps = System.Diagnostics.Stopwatch.Frequency / (double)deltaTicks;
+            label.Text = $"FPS: {fps:F1}";
+        }
     }
 
     public void UpdateGoalsAndPlan(Goal? goal, string? nextSkillName, IEnumerable<string> subskillTreeLines)

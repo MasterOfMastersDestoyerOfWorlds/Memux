@@ -449,6 +449,7 @@ class Program
         
         int frameCount = 0;
         var lastSecond = DateTime.UtcNow;
+        int blankFrames = 0;
         
         try
         {
@@ -464,8 +465,27 @@ class Program
                     // If capture failed (e.g., window not ready), skip this frame
                     if (state.Width <= 0 || state.Height <= 0 || state.ScreenData == null || state.ScreenData.Length == 0)
                     {
+                        blankFrames++;
+                        if (blankFrames >= 10)
+                        {
+                            TryReacquireWindowHandle(perception, prog?.ProcessName);
+                            blankFrames = 0;
+                        }
                         await Task.Delay(16);
                         continue;
+                    }
+                    else if (IsProbablyAllBlack(state.ScreenData))
+                    {
+                        blankFrames++;
+                        if (blankFrames >= 10)
+                        {
+                            TryReacquireWindowHandle(perception, prog?.ProcessName);
+                            blankFrames = 0;
+                        }
+                    }
+                    else
+                    {
+                        blankFrames = 0;
                     }
                     
                     // Analyze context
@@ -664,4 +684,51 @@ class Program
 
     [System.Runtime.InteropServices.DllImport("user32.dll")]
     private static extern IntPtr GetDesktopWindow();
+
+    private static bool IsProbablyAllBlack(byte[] data)
+    {
+        try
+        {
+            if (data == null || data.Length < 16) return true;
+            int nonBlack = 0;
+            int step = Math.Max(4, data.Length / 4096);
+            for (int i = 0; i < data.Length; i += step)
+            {
+                byte b = data[i];
+                byte g = (i + 1) < data.Length ? data[i + 1] : (byte)0;
+                byte r = (i + 2) < data.Length ? data[i + 2] : (byte)0;
+                if (b > 2 || g > 2 || r > 2)
+                {
+                    nonBlack++;
+                    if (nonBlack > 32) return false;
+                }
+            }
+            return true;
+        }
+        catch { return false; }
+    }
+
+    private static void TryReacquireWindowHandle(Memux.Perception.PerceptionPipeline perception, string? processName)
+    {
+        try
+        {
+            if (string.IsNullOrEmpty(processName)) return;
+            var procs = System.Diagnostics.Process.GetProcessesByName(processName);
+            foreach (var p in procs)
+            {
+                try
+                {
+                    p.Refresh();
+                    if (p.MainWindowHandle != IntPtr.Zero)
+                    {
+                        perception.UpdateWindowHandle(p.MainWindowHandle);
+                        WindowFocusHelper.TryFocusWindow(p.MainWindowHandle);
+                        return;
+                    }
+                }
+                catch { }
+            }
+        }
+        catch { }
+    }
 }
