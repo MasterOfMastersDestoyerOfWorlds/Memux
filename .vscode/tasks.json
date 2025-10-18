@@ -1,0 +1,61 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Build Memux.App",
+      "type": "process",
+      "command": "dotnet",
+      "args": [
+        "build",
+        "src/Memux.App/Memux.App.csproj"
+      ],
+      "problemMatcher": ["$msCompile"],
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      }
+    },
+    {
+      "label": "Test All",
+      "type": "process",
+      "command": "dotnet",
+      "args": [
+        "test"
+      ],
+      "problemMatcher": ["$msCompile"],
+      "group": {
+        "kind": "test",
+        "isDefault": true
+      }
+    },
+    {
+      "label": "Build and Test",
+      "dependsOrder": "sequence",
+      "dependsOn": ["Build Memux.App", "Test All"]
+    },
+    {
+      "label": "Run Memux.App (Main)",
+      "type": "process",
+      "command": "dotnet",
+      "args": [
+        "run",
+        "--project",
+        "src/Memux.App/Memux.App.csproj"
+      ],
+      "dependsOn": ["Build and Test"],
+      "dependsOrder": "sequence",
+      "problemMatcher": []
+    },
+    {
+      "label": "Memux: Build + Run",
+      "type": "shell",
+      "command": "echo Starting Memux.App...",
+      "dependsOn": ["Run Memux.App (Main)"],
+      "dependsOrder": "sequence",
+      "problemMatcher": []
+    }
+  ]
+}
+
+
+

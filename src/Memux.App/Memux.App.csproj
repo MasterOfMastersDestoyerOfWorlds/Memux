@@ -2,10 +2,11 @@
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <TargetFramework>net8.0</TargetFramework>
+    <TargetFramework>net8.0-windows</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <Platforms>x64</Platforms>
+    <UseWindowsForms>true</UseWindowsForms>
   </PropertyGroup>
 
   <ItemGroup>
@@ -18,6 +19,7 @@
     <ProjectReference Include="..\Memux.Curriculum\Memux.Curriculum.csproj" />
     <ProjectReference Include="..\Memux.DarkSouls\Memux.DarkSouls.csproj" />
     <ProjectReference Include="..\Memux.CodeGen\Memux.CodeGen.csproj" />
+    <ProjectReference Include="..\Memux.UI\Memux.UI.csproj" />
   </ItemGroup>
 
 </Project>

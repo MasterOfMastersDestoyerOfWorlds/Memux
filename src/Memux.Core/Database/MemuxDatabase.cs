@@ -11,7 +11,7 @@ namespace Memux.Core.Database;
 /// - Column 4: List of words that describe the skill (tags)
 /// - Column 5: Location in the codebase where the code exists
 /// </summary>
-public class MemuxDatabase : IDisposable
+public partial class MemuxDatabase : IDisposable
 {
     private readonly SqliteConnection _connection;
     private readonly string _dbPath;
@@ -83,8 +83,51 @@ public class MemuxDatabase : IDisposable
             CREATE INDEX IF NOT EXISTS idx_skill_usage_history_skill ON skill_usage_history(skill_id);
             CREATE INDEX IF NOT EXISTS idx_goals_status ON goals(status);
             CREATE INDEX IF NOT EXISTS idx_action_sequences_timestamp ON action_sequences(timestamp);
+
+            CREATE TABLE IF NOT EXISTS programs (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL UNIQUE,
+                exe_path TEXT NOT NULL,
+                process_name TEXT NOT NULL,
+                window_title_pattern TEXT,
+                launch_args TEXT,
+                run_as_admin INTEGER NOT NULL DEFAULT 0,
+                preferred_width INTEGER,
+                preferred_height INTEGER,
+                is_default INTEGER NOT NULL DEFAULT 0,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_programs_default ON programs(is_default);
         ";
         command.ExecuteNonQuery();
+
+        // Seed default Dark Souls entry if table is empty (via Steam applaunch)
+        try
+        {
+            var check = _connection.CreateCommand();
+            check.CommandText = "SELECT COUNT(1) FROM programs";
+            var count = Convert.ToInt32(check.ExecuteScalar());
+            if (count == 0)
+            {
+                var steamExe = @"C:\\Program Files (x86)\\Steam\\steam.exe";
+                if (File.Exists(steamExe))
+                {
+                    UpsertProgram(
+                        id: null,
+                        name: "dark_souls",
+                        exePath: steamExe,
+                        processName: "DarkSoulsRemastered",
+                        windowTitlePattern: null,
+                        launchArgs: "-applaunch 570940",
+                        runAsAdmin: true,
+                        preferredWidth: 1920,
+                        preferredHeight: 1080,
+                        isDefault: true);
+                }
+            }
+        }
+        catch { }
     }
     
     public void InsertSkill(
@@ -283,6 +326,208 @@ public class MemuxDatabase : IDisposable
     public void Dispose()
     {
         _connection.Dispose();
+    }
+}
+
+public class ProgramRecord
+{
+    public string Id { get; set; } = string.Empty;
+    public string Name { get; set; } = string.Empty;
+    public string ExePath { get; set; } = string.Empty;
+    public string ProcessName { get; set; } = string.Empty;
+    public string? WindowTitlePattern { get; set; }
+    public string? LaunchArgs { get; set; }
+    public bool RunAsAdmin { get; set; }
+    public int? PreferredWidth { get; set; }
+    public int? PreferredHeight { get; set; }
+    public bool IsDefault { get; set; }
+}
+
+public partial class MemuxDatabase
+{
+    public ProgramRecord UpsertProgram(
+        string? id,
+        string name,
+        string exePath,
+        string processName,
+        string? windowTitlePattern = null,
+        string? launchArgs = null,
+        bool runAsAdmin = false,
+        int? preferredWidth = null,
+        int? preferredHeight = null,
+        bool isDefault = false)
+    {
+        id ??= Guid.NewGuid().ToString();
+
+        var existing = GetProgramByNameOrId(name) ?? GetProgramByNameOrId(id);
+        if (existing == null)
+        {
+            var insert = _connection.CreateCommand();
+            insert.CommandText = @"
+                INSERT INTO programs (
+                    id, name, exe_path, process_name, window_title_pattern,
+                    launch_args, run_as_admin, preferred_width, preferred_height,
+                    is_default, created_at, updated_at)
+                VALUES (
+                    $id, $name, $exe_path, $process_name, $window_title_pattern,
+                    $launch_args, $run_as_admin, $preferred_width, $preferred_height,
+                    $is_default, $created_at, $updated_at)
+            ";
+            insert.Parameters.AddWithValue("$id", id);
+            insert.Parameters.AddWithValue("$name", name);
+            insert.Parameters.AddWithValue("$exe_path", exePath);
+            insert.Parameters.AddWithValue("$process_name", processName);
+            insert.Parameters.AddWithValue("$window_title_pattern", (object?)windowTitlePattern ?? DBNull.Value);
+            insert.Parameters.AddWithValue("$launch_args", (object?)launchArgs ?? DBNull.Value);
+            insert.Parameters.AddWithValue("$run_as_admin", runAsAdmin ? 1 : 0);
+            insert.Parameters.AddWithValue("$preferred_width", (object?)preferredWidth ?? DBNull.Value);
+            insert.Parameters.AddWithValue("$preferred_height", (object?)preferredHeight ?? DBNull.Value);
+            insert.Parameters.AddWithValue("$is_default", isDefault ? 1 : 0);
+            insert.Parameters.AddWithValue("$created_at", DateTime.UtcNow.ToString("O"));
+            insert.Parameters.AddWithValue("$updated_at", DateTime.UtcNow.ToString("O"));
+            insert.ExecuteNonQuery();
+        }
+        else
+        {
+            var update = _connection.CreateCommand();
+            update.CommandText = @"
+                UPDATE programs SET
+                    exe_path = $exe_path,
+                    process_name = $process_name,
+                    window_title_pattern = $window_title_pattern,
+                    launch_args = $launch_args,
+                    run_as_admin = $run_as_admin,
+                    preferred_width = $preferred_width,
+                    preferred_height = $preferred_height,
+                    is_default = $is_default,
+                    updated_at = $updated_at
+                WHERE name = $name OR id = $id
+            ";
+            update.Parameters.AddWithValue("$id", id);
+            update.Parameters.AddWithValue("$name", name);
+            update.Parameters.AddWithValue("$exe_path", exePath);
+            update.Parameters.AddWithValue("$process_name", processName);
+            update.Parameters.AddWithValue("$window_title_pattern", (object?)windowTitlePattern ?? DBNull.Value);
+            update.Parameters.AddWithValue("$launch_args", (object?)launchArgs ?? DBNull.Value);
+            update.Parameters.AddWithValue("$run_as_admin", runAsAdmin ? 1 : 0);
+            update.Parameters.AddWithValue("$preferred_width", (object?)preferredWidth ?? DBNull.Value);
+            update.Parameters.AddWithValue("$preferred_height", (object?)preferredHeight ?? DBNull.Value);
+            update.Parameters.AddWithValue("$is_default", isDefault ? 1 : 0);
+            update.Parameters.AddWithValue("$updated_at", DateTime.UtcNow.ToString("O"));
+            update.ExecuteNonQuery();
+        }
+
+        if (isDefault)
+        {
+            // Ensure only one default
+            var clearOthers = _connection.CreateCommand();
+            clearOthers.CommandText = @"
+                UPDATE programs SET is_default = 0 WHERE name <> $name AND id <> $id
+            ";
+            clearOthers.Parameters.AddWithValue("$name", name);
+            clearOthers.Parameters.AddWithValue("$id", id);
+            clearOthers.ExecuteNonQuery();
+        }
+
+        return GetProgramByNameOrId(name)!;
+    }
+
+    public ProgramRecord? GetProgramByNameOrId(string key)
+    {
+        var cmd = _connection.CreateCommand();
+        cmd.CommandText = @"
+            SELECT id, name, exe_path, process_name, window_title_pattern, launch_args,
+                   run_as_admin, preferred_width, preferred_height, is_default
+            FROM programs
+            WHERE id = $key OR name = $key
+            LIMIT 1
+        ";
+        cmd.Parameters.AddWithValue("$key", key);
+        using var reader = cmd.ExecuteReader();
+        if (reader.Read())
+        {
+            return ReadProgram(reader);
+        }
+        return null;
+    }
+
+    public ProgramRecord? GetDefaultProgram()
+    {
+        var cmd = _connection.CreateCommand();
+        cmd.CommandText = @"
+            SELECT id, name, exe_path, process_name, window_title_pattern, launch_args,
+                   run_as_admin, preferred_width, preferred_height, is_default
+            FROM programs
+            WHERE is_default = 1
+            LIMIT 1
+        ";
+        using var reader = cmd.ExecuteReader();
+        if (reader.Read())
+        {
+            return ReadProgram(reader);
+        }
+        return null;
+    }
+
+    public List<ProgramRecord> ListPrograms()
+    {
+        var cmd = _connection.CreateCommand();
+        cmd.CommandText = @"
+            SELECT id, name, exe_path, process_name, window_title_pattern, launch_args,
+                   run_as_admin, preferred_width, preferred_height, is_default
+            FROM programs
+            ORDER BY name
+        ";
+        var list = new List<ProgramRecord>();
+        using var reader = cmd.ExecuteReader();
+        while (reader.Read())
+        {
+            list.Add(ReadProgram(reader));
+        }
+        return list;
+    }
+
+    public bool SetDefaultProgram(string key)
+    {
+        var prog = GetProgramByNameOrId(key);
+        if (prog == null) return false;
+        var tx = _connection.BeginTransaction();
+        try
+        {
+            var clear = _connection.CreateCommand();
+            clear.CommandText = @"UPDATE programs SET is_default = 0";
+            clear.ExecuteNonQuery();
+
+            var set = _connection.CreateCommand();
+            set.CommandText = @"UPDATE programs SET is_default = 1 WHERE id = $id";
+            set.Parameters.AddWithValue("$id", prog.Id);
+            set.ExecuteNonQuery();
+
+            tx.Commit();
+            return true;
+        }
+        catch
+        {
+            try { tx.Rollback(); } catch { }
+            return false;
+        }
+    }
+
+    private static ProgramRecord ReadProgram(SqliteDataReader reader)
+    {
+        return new ProgramRecord
+        {
+            Id = reader.GetString(0),
+            Name = reader.GetString(1),
+            ExePath = reader.GetString(2),
+            ProcessName = reader.GetString(3),
+            WindowTitlePattern = reader.IsDBNull(4) ? null : reader.GetString(4),
+            LaunchArgs = reader.IsDBNull(5) ? null : reader.GetString(5),
+            RunAsAdmin = reader.GetInt32(6) != 0,
+            PreferredWidth = reader.IsDBNull(7) ? null : reader.GetInt32(7),
+            PreferredHeight = reader.IsDBNull(8) ? null : reader.GetInt32(8),
+            IsDefault = reader.GetInt32(9) != 0
+        };
     }
 }
 

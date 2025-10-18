@@ -27,6 +27,12 @@ public class Skill
     /// This is not serialized - recompiled on load
     /// </summary>
     public Func<PerceptionState, ActionQueue>? Execute { get; set; }
+
+    /// <summary>
+    /// Optional runtime subskill invoker. If provided, skills can call subskills
+    /// by name and this will record a runtime call graph for UI.
+    /// </summary>
+    public Func<string, PerceptionState, ActionQueue?>? InvokeSubskill { get; set; }
     
     /// <summary>
     /// Success rate (0.0 to 1.0)

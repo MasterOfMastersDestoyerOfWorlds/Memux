@@ -147,5 +147,13 @@ public class PerceptionPipeline : IDisposable
         _objectDetector?.Dispose();
         _ocrEngine?.Dispose();
     }
+
+    /// <summary>
+    /// Update the underlying capture window handle when it changes
+    /// </summary>
+    public void UpdateWindowHandle(IntPtr windowHandle)
+    {
+        _screenCapture.SetWindowHandle(windowHandle);
+    }
 }
 

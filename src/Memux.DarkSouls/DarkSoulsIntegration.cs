@@ -12,25 +12,34 @@ public class DarkSoulsIntegration
 {
     private const string PROCESS_NAME = "DarkSoulsRemastered";
     private const string WINDOW_TITLE = "DARK SOULS";
-    
+    // Default Steam launch
+    private const string DEFAULT_STEAM_EXE = @"C:\\Program Files (x86)\\Steam\\steam.exe";
+    private const string DEFAULT_STEAM_ARGS = "-applaunch 570940";
+
     private readonly ProcessManager _processManager;
-    
-    public DarkSoulsIntegration(string? executablePath = null)
+    private readonly string? _launchArgs;
+
+    public DarkSoulsIntegration(string? executablePath = null, string? launchArgs = null)
     {
-        // Default path for Dark Souls Remastered
-        executablePath ??= @"C:\Program Files (x86)\Steam\steamapps\common\DARK SOULS REMASTERED\DarkSoulsRemastered.exe";
+        // If no explicit executable provided, default to Steam applaunch
+        if (string.IsNullOrEmpty(executablePath))
+        {
+            executablePath = DEFAULT_STEAM_EXE;
+            launchArgs ??= DEFAULT_STEAM_ARGS;
+        }
+        _launchArgs = launchArgs;
         _processManager = new ProcessManager(executablePath);
     }
-    
+
     /// <summary>
     /// Launch Dark Souls Remastered
     /// </summary>
     public bool LaunchGame()
     {
         Console.WriteLine("Launching Dark Souls Remastered...");
-        return _processManager.Launch();
+        return _processManager.Launch(_launchArgs);
     }
-    
+
     /// <summary>
     /// Attach to an already running instance
     /// </summary>
@@ -39,7 +48,7 @@ public class DarkSoulsIntegration
         Console.WriteLine("Searching for Dark Souls Remastered process...");
         return _processManager.AttachToExisting(PROCESS_NAME);
     }
-    
+
     /// <summary>
     /// Get the game window handle
     /// </summary>
@@ -49,13 +58,19 @@ public class DarkSoulsIntegration
         var handle = _processManager.GetMainWindowHandle();
         if (handle != IntPtr.Zero)
         {
+            WindowFocusHelper.TryFocusWindow(handle);
             return handle;
         }
         
         // Fallback: search by window title
-        return FindWindow(null, WINDOW_TITLE);
+        var h = FindWindow(null, WINDOW_TITLE);
+        if (h != IntPtr.Zero)
+        {
+            WindowFocusHelper.TryFocusWindow(h);
+        }
+        return h;
     }
-    
+
     /// <summary>
     /// Check if game is running
     /// </summary>
@@ -63,7 +78,7 @@ public class DarkSoulsIntegration
     {
         return _processManager.IsRunning();
     }
-    
+
     /// <summary>
     /// Bring game window to foreground
     /// </summary>
@@ -71,7 +86,7 @@ public class DarkSoulsIntegration
     {
         _processManager.BringToForeground();
     }
-    
+
     /// <summary>
     /// Get game-specific context hints based on screen analysis
     /// These are optional heuristics to help perception
@@ -89,7 +104,7 @@ public class DarkSoulsIntegration
         
         return hints;
     }
-    
+
     /// <summary>
     /// Map abstract action names to Dark Souls specific inputs
     /// </summary>
@@ -113,7 +128,7 @@ public class DarkSoulsIntegration
             _ => abstractAction
         };
     }
-    
+
     [DllImport("user32.dll", SetLastError = true)]
     private static extern IntPtr FindWindow(string? lpClassName, string lpWindowName);
 }

@@ -1,163 +1,84 @@
-# Memux - General Skill Acquisition System
+# Memux — Voyager-Inspired Skill Acquisition for Dark Souls
 
-Memux is a skill acquisition system inspired by [Voyager](https://github.com/MineDojo/Voyager) and the Everything CLI philosophy. It learns skills through observation and execution, using computer vision for perception and a two-tier LLM architecture for skill selection and composition.
+Memux is an autonomous skill acquisition system inspired by Voyager (MineDojo). It learns skills through observation and execution, using a perception pipeline (screen capture + CV), a local selector for real-time decisions, and a large-model composer for new skill generation.
 
-## Architecture
+## What You Get (High-Level)
 
-Memux combines:
+- Perception: Screen capture, optional depth, object, and text signals
+- Selection: Fast local selector with caching and rule fallback
+- Skills: Executable, ranked skills with runtime compilation
+- Composer: LLM-based skill generation and debugging
+- Curriculum: Goal generation and progress tracking
 
-- **Bottom-up skill discovery** from observed behavior patterns
-- **Top-down goal-driven curriculum** for autonomous learning
-- **Two-tier LLM system**: small local LLM for real-time skill selection, large LLM for skill composition
-- **ELO ranking** to surface the most useful skills
-- **Database persistence** following the Everything CLI schema
-- **Windows notifications** for new skill discoveries
+All components are designed to be game-agnostic; `Memux.DarkSouls` provides the thin integration layer.
 
-## Project Structure
+## Current Status (Phases 1–4 Implemented)
 
-```
-src/
-├── Memux.Core/         # Core data models and database
-├── Memux.Perception/   # Screen capture and CV (depth, OCR, segmentation)
-├── Memux.Actions/      # Input simulation (keyboard, controller)
-├── Memux.Skills/       # Skill library, compiler, ELO system
-├── Memux.Selection/    # Local LLM for skill selection
-├── Memux.Composer/     # Large LLM for skill composition
-├── Memux.Curriculum/   # Goal generation and progress tracking
-├── Memux.CodeGen/      # Deterministic skill templates
-├── Memux.DarkSouls/    # Dark Souls Remastered integration
-└── Memux.UI/           # Notification system
-```
+- Core models, database, execution, and notifications
+- CV pipeline (MiDaS/YOLO/Tesseract via ONNX Runtime, GPU optional)
+- Local selection with caching; rule-based fallback for reliability
+- LLM composition (HTTP client abstraction + templated prompts)
 
-## Technology Stack
+These provide a complete loop for perception → selection → execution, and an offline path for generating new skills.
 
-- **Language**: C# (.NET 8)
-- **CV Inference**: ONNX Runtime (MiDaS, YOLO, Tesseract)
-- **Compilation**: Roslyn (Microsoft.CodeAnalysis)
-- **LLM APIs**: OpenAI, Anthropic
-- **Local LLM**: LLamaSharp (llama.cpp bindings)
-- **Input Simulation**: Windows SendInput API, XInput
-- **Persistence**: SQLite
+## Quick Start
 
-## Getting Started
-
-### Prerequisites
-
-- .NET 8 SDK
-- Windows 10/11 (for input simulation and screen capture)
-- Dark Souls Remastered (for testing)
-- OpenAI or Anthropic API key
-
-### Building
-
+1) Build
 ```bash
 dotnet build
 ```
 
-### Running Tests
-
-```bash
-# Run all 45 unit tests
-dotnet test
-
-# Run with detailed output
-dotnet test --logger "console;verbosity=detailed"
+2) Optional: Download minimal CV models (Windows PowerShell)
+```powershell
+New-Item -ItemType Directory -Force -Path "models\tessdata"
+Invoke-WebRequest -Uri "https://github.com/isl-org/MiDaS/releases/download/v3_1/midas_v21_small_256.onnx" -OutFile "models\midas_small.onnx"
+Invoke-WebRequest -Uri "https://github.com/ultralytics/assets/releases/download/v0.0.0/yolov8n.onnx" -OutFile "models\yolov8n.onnx"
+Invoke-WebRequest -Uri "https://raw.githubusercontent.com/pjreddie/darknet/master/data/coco.names" -OutFile "models\coco_classes.txt"
+Invoke-WebRequest -Uri "https://github.com/tesseract-ocr/tessdata_fast/raw/main/eng.traineddata" -OutFile "models\tessdata\eng.traineddata"
 ```
 
-See `TESTS.md` for complete test documentation.
-
-### Running
-
+3) Run demos (pick what you need)
 ```bash
-# Set your OpenAI API key
-export OPENAI_API_KEY="sk-..."  # Linux/Mac
-$env:OPENAI_API_KEY = "sk-..."  # Windows PowerShell
-
-# Run the basic demo
-dotnet run --project src/Memux.App -- --demo
-
-# Run the comprehensive Phase 2 demo (LLM features)
+# LLM (composer) demo
 dotnet run --project src/Memux.App -- --phase2-demo
 
-# Run the comprehensive Phase 3 demo (CV pipeline)
-dotnet run --project src/Memux.App -- --phase3-demo
-
-# Run the comprehensive Phase 4 demo (Skill selection)
-dotnet run --project src/Memux.App -- --phase4-demo
-
-# Run Phase 4 with local LLM (optional)
-dotnet run --project src/Memux.App -- --phase4-demo \
-  --llm-model models/tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf
-
-# Run with CV models (see MODEL_SETUP.md for setup)
+# CV pipeline demo (works without models; richer with models)
 dotnet run --project src/Memux.App -- --phase3-demo \
   --depth-model models/midas_small.onnx \
   --object-model models/yolov8n.onnx \
   --object-classes models/coco_classes.txt \
   --tess-data models/tessdata
 
-# Run full autonomous mode (requires Dark Souls)
-dotnet run --project src/Memux.App -- --game "C:\Path\To\DarkSoulsRemastered.exe"
+# Skill selection demo (local selector; optional GGUF model)
+dotnet run --project src/Memux.App -- --phase4-demo
 ```
 
-## Key Design Principles
+4) Optional: Local LLM for selection (GGUF via LLamaSharp)
+```bash
+dotnet run --project src/Memux.App -- --phase4-demo \
+  --llm-model models/tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf
+```
 
-1. **Locality of Concern**: Skills are self-contained with explicit dependencies
-2. **Deterministic Generation**: Use templates for skill variations
-3. **No Information Hiding**: Skills are readable C# code
-4. **Three Times to Tool**: Hand-write first, template after repetition
-5. **Generic Core**: No game-specific logic in core modules
+## Architecture (Overview)
 
-## Current Status
+```
+Perception ──→ Context ──→ Selection ──→ Execution
+              └──────────── Composer ──→ New Skills
+```
 
-**Phase 1: Core Infrastructure** ✅ COMPLETE
-- Solution structure created
-- PerceptionState and ActionQueue models
-- Database schema (SQLite)
-- Screen capture (BitBlt)
-- Input simulation (keyboard, controller)
-- Process manager for launching target applications
-- Windows notification system
-- Skill library with Roslyn compilation
-- ELO ranking system
+- Perception: Screen + optional depth/objects/text → unified state
+- Selection: Local model + rules + cache → sub‑16ms path
+- Execution: Action queues simulate inputs
+- Composer: Large model generates/repairs skills offline
+- Curriculum: Goals drive exploration and acquisition
 
-**Phase 2: LLM Integration** ✅ COMPLETE
-- ILlmClient abstraction (OpenAI HTTP client)
-- ComposerAgent for skill generation
-- Voyager-style prompt templates
-- CurriculumAgent with 10-second re-evaluation
-- SkillTemplateEngine for deterministic generation
-- Meta-skill composition
-- Skill debugging feedback loop
-- Comprehensive demo (see `PHASE2_COMPLETE.md`)
+## Roadmap to “Past the First Level”
 
-**Phase 3: CV Pipeline** ✅ COMPLETE
-- ONNX Runtime integration
-- MiDaS depth estimation (monocular depth)
-- YOLO object detection (bounding boxes + classes)
-- Tesseract OCR (text extraction)
-- Parallel CV processing
-- GPU acceleration (CUDA)
-- Comprehensive demo (see `PHASE3_COMPLETE.md`)
-- Model setup guide (see `MODEL_SETUP.md`)
+See TODO.md for a Voyager‑style checklist that takes the agent from boot to exiting the Undead Asylum (or equivalent “first level” milestone) and onward.
 
-**Phase 4: Skill Selection** ✅ COMPLETE
-- ContextAnalyzer for extracting high-level context
-- Local LLM integration (LLamaSharp with GGUF models)
-- Rule-based fallback selector
-- SkillCache for performance optimization
-- <16ms selection target (achieved)
-- Comprehensive demo (see `PHASE4_COMPLETE.md`)
+## License & Credits
 
-See `STATUS.md` for detailed progress tracking.
-
-## License
-
-MIT License - See LICENSE file for details
-
-## Acknowledgments
-
-- [Voyager](https://github.com/MineDojo/Voyager) for the skill acquisition architecture
-- The Everything CLI essay for the behavior-driven skill discovery approach
-- [MineDojo](https://github.com/MineDojo/MineDojo) for embodied agent research
+- License: MIT
+- Inspiration: Voyager (MineDojo)
+- Techniques: Everything CLI, ELO‑ranked skills, templated codegen
 

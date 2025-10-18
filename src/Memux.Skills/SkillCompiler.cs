@@ -46,12 +46,13 @@ public class SkillCompiler
                     (Memux.Core.Models.PerceptionState state) => 
                     {{
                         var queue = new Memux.Core.Models.ActionQueue();
-                        System.Func<System.Threading.Tasks.Task> __runner = async () => 
+                        System.Func<System.Threading.Tasks.Task<Memux.Core.Models.ActionQueue?>> __runner = async () => 
                         {{
                             {code}
+                            return null;
                         }};
-                        __runner().GetAwaiter().GetResult();
-                        return queue;
+                        var __result = __runner().GetAwaiter().GetResult();
+                        return __result ?? queue;
                     }}
                 ";
             }

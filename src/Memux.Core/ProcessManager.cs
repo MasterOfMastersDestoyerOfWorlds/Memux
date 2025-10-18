@@ -21,7 +21,7 @@ public class ProcessManager
     /// <summary>
     /// Launch the target application
     /// </summary>
-    public bool Launch()
+    public bool Launch(string? arguments = null, bool runAsAdmin = false)
     {
         try
         {
@@ -31,6 +31,14 @@ public class ProcessManager
                 WorkingDirectory = _workingDirectory,
                 UseShellExecute = true
             };
+            if (!string.IsNullOrWhiteSpace(arguments))
+            {
+                startInfo.Arguments = arguments!;
+            }
+            if (runAsAdmin)
+            {
+                startInfo.Verb = "runas";
+            }
             
             _targetProcess = Process.Start(startInfo);
             
