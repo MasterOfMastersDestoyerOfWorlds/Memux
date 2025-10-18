@@ -4,7 +4,7 @@ using System.Runtime.InteropServices;
 namespace Memux.Core;
 
 /// <summary>
-/// Manages launching and monitoring target applications (e.g., Dark Souls Remastered)
+/// Manages launching and monitoring target applications
 /// </summary>
 public class ProcessManager
 {

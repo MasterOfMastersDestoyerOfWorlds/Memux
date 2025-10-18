@@ -11,6 +11,17 @@
       "cwd": "${workspaceFolder}",
       "console": "externalTerminal",
       "stopAtEntry": false
+    },
+    {
+      "name": "Run Memux.App Unit Tests",
+      "type": "coreclr",
+      "request": "launch",
+      "noDebug": true,
+      "preLaunchTask": "Run Memux.App (Main)",
+      "program": "dotnet",
+      "cwd": "${workspaceFolder}",
+      "console": "externalTerminal",
+      "stopAtEntry": false
     }
   ]
 }

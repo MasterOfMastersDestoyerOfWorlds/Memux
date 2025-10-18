@@ -42,6 +42,19 @@
         "--project",
         "src/Memux.App/Memux.App.csproj"
       ],
+      "dependsOn": ["Build Memux.App"],
+      "dependsOrder": "sequence",
+      "problemMatcher": []
+    },
+    {
+      "label": "Run Memux.App (Main) Unit Tests",
+      "type": "process",
+      "command": "dotnet",
+      "args": [
+        "run",
+        "--project",
+        "src/Memux.App/Memux.App.csproj"
+      ],
       "dependsOn": ["Build and Test"],
       "dependsOrder": "sequence",
       "problemMatcher": []

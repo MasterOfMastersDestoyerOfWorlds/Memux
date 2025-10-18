@@ -15,6 +15,12 @@ public class ContextAnalyzer
             Timestamp = state.Timestamp
         };
         
+        // Focused program tag for skill scoping
+        if (!string.IsNullOrEmpty(state.FocusedProgram))
+        {
+            context.Tags.Add($"program:{state.FocusedProgram}");
+        }
+        
         // Analyze OCR text for context clues
         if (state.OcrResults != null && state.OcrResults.Any())
         {

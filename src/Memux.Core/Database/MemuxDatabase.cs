@@ -102,7 +102,10 @@ public partial class MemuxDatabase : IDisposable
         ";
         command.ExecuteNonQuery();
 
-        // Seed default Dark Souls entry if table is empty (via Steam applaunch)
+        // Ensure schema is up-to-date and migrate if needed
+        try { EnsureLatestSchema(); } catch { }
+
+        // Seed example programs if table is empty
         try
         {
             var check = _connection.CreateCommand();
@@ -110,20 +113,155 @@ public partial class MemuxDatabase : IDisposable
             var count = Convert.ToInt32(check.ExecuteScalar());
             if (count == 0)
             {
-                var steamExe = @"C:\\Program Files (x86)\\Steam\\steam.exe";
+                // Add example programs for demonstration
+                var steamExe = @"C:\Program Files (x86)\Steam\steam.exe";
                 if (File.Exists(steamExe))
                 {
+                    // Example: Dark Souls Remastered via Steam
                     UpsertProgram(
                         id: null,
-                        name: "dark_souls",
+                        name: "dark_souls_remastered",
                         exePath: steamExe,
                         processName: "DarkSoulsRemastered",
-                        windowTitlePattern: null,
+                        windowTitlePattern: "DARK SOULS",
                         launchArgs: "-applaunch 570940",
                         runAsAdmin: true,
                         preferredWidth: 1920,
                         preferredHeight: 1080,
                         isDefault: true);
+                }
+                
+                // Add more example programs as needed
+                // Example: Notepad
+                var notepadExe = @"C:\Windows\System32\notepad.exe";
+                if (File.Exists(notepadExe))
+                {
+                    UpsertProgram(
+                        id: null,
+                        name: "notepad",
+                        exePath: notepadExe,
+                        processName: "notepad",
+                        windowTitlePattern: "Notepad",
+                        launchArgs: null,
+                        runAsAdmin: false,
+                        preferredWidth: 800,
+                        preferredHeight: 600,
+                        isDefault: false);
+                }
+            }
+        }
+        catch { }
+
+        // Always ensure simple test program exists (Notepad)
+        try { EnsureNotepadProgram(); } catch { }
+    }
+
+    private void EnsureLatestSchema()
+    {
+        // Use PRAGMA user_version to track schema version
+        int currentVersion = GetUserVersion();
+        int targetVersion = 1;
+
+        // Idempotent migrations: add missing columns to programs table if absent
+        EnsureProgramsTableColumns();
+
+        if (currentVersion < targetVersion)
+        {
+            SetUserVersion(targetVersion);
+        }
+    }
+
+    private int GetUserVersion()
+    {
+        try
+        {
+            using var cmd = _connection.CreateCommand();
+            cmd.CommandText = "PRAGMA user_version";
+            var obj = cmd.ExecuteScalar();
+            return obj is long l ? (int)l : (obj is int i ? i : 0);
+        }
+        catch { return 0; }
+    }
+
+    private void SetUserVersion(int version)
+    {
+        try
+        {
+            using var cmd = _connection.CreateCommand();
+            cmd.CommandText = $"PRAGMA user_version = {version}";
+            cmd.ExecuteNonQuery();
+        }
+        catch { }
+    }
+
+    private void EnsureProgramsTableColumns()
+    {
+        try
+        {
+            var columns = GetTableColumns("programs");
+            void AddColumnIfMissing(string name, string ddl)
+            {
+                if (!columns.Contains(name))
+                {
+                    using var alter = _connection.CreateCommand();
+                    alter.CommandText = $"ALTER TABLE programs ADD COLUMN {ddl}";
+                    alter.ExecuteNonQuery();
+                }
+            }
+
+            // Add only columns that are safe to add with defaults or nulls
+            AddColumnIfMissing("window_title_pattern", "window_title_pattern TEXT");
+            AddColumnIfMissing("launch_args", "launch_args TEXT");
+            AddColumnIfMissing("run_as_admin", "run_as_admin INTEGER NOT NULL DEFAULT 0");
+            AddColumnIfMissing("preferred_width", "preferred_width INTEGER");
+            AddColumnIfMissing("preferred_height", "preferred_height INTEGER");
+            AddColumnIfMissing("is_default", "is_default INTEGER NOT NULL DEFAULT 0");
+        }
+        catch { }
+    }
+
+    private HashSet<string> GetTableColumns(string table)
+    {
+        var set = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        try
+        {
+            using var cmd = _connection.CreateCommand();
+            cmd.CommandText = $"PRAGMA table_info({table})";
+            using var reader = cmd.ExecuteReader();
+            while (reader.Read())
+            {
+                // Column name is at index 1
+                if (!reader.IsDBNull(1))
+                {
+                    set.Add(reader.GetString(1));
+                }
+            }
+        }
+        catch { }
+        return set;
+    }
+
+    private void EnsureNotepadProgram()
+    {
+        try
+        {
+            var existing = GetProgramByNameOrId("notepad");
+            if (existing == null)
+            {
+                var notepadExe = @"C:\\Windows\\System32\\notepad.exe";
+                if (File.Exists(notepadExe))
+                {
+                    UpsertProgram(
+                        id: null,
+                        name: "notepad",
+                        exePath: notepadExe,
+                        processName: "notepad",
+                        windowTitlePattern: "Notepad",
+                        launchArgs: null,
+                        runAsAdmin: false,
+                        preferredWidth: 800,
+                        preferredHeight: 600,
+                        isDefault: false);
                 }
             }
         }

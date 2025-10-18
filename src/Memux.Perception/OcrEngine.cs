@@ -51,41 +51,52 @@ public class OcrEngine : IDisposable
             // Convert BGRA to grayscale for better OCR
             var grayData = ConvertToGrayscale(rgbaData, width, height);
             
-            using var img = Pix.LoadFromMemory(grayData);
-            using var page = _engine.Process(img);
-            
-            var results = new List<OcrResult>();
-            
-            // Get text with bounding boxes
-            using var iter = page.GetIterator();
-            iter.Begin();
-            
-            do
+            // Create a temporary PNG file and load it
+            var tempFile = Path.GetTempFileName() + ".png";
+            try
             {
-                if (iter.TryGetBoundingBox(PageIteratorLevel.Word, out var bounds))
+                CreateGrayscalePng(grayData, width, height, tempFile);
+                using var img = Pix.LoadFromFile(tempFile);
+                using var page = _engine.Process(img);
+                
+                var results = new List<OcrResult>();
+                
+                // Get text with bounding boxes
+                using var iter = page.GetIterator();
+                iter.Begin();
+                
+                do
                 {
-                    string word = iter.GetText(PageIteratorLevel.Word);
-                    float confidence = iter.GetConfidence(PageIteratorLevel.Word) / 100f;
-                    
-                    if (confidence > 0.5f && !string.IsNullOrWhiteSpace(word))
+                    if (iter.TryGetBoundingBox(PageIteratorLevel.Word, out var bounds))
                     {
-                        results.Add(new OcrResult
+                        string word = iter.GetText(PageIteratorLevel.Word);
+                        float confidence = iter.GetConfidence(PageIteratorLevel.Word) / 100f;
+                        
+                        if (confidence > 0.5f && !string.IsNullOrWhiteSpace(word))
                         {
-                            Text = word.Trim(),
-                            Confidence = confidence,
-                            BoundingBox = new BoundingBox
+                            results.Add(new OcrResult
                             {
-                                X = bounds.X1,
-                                Y = bounds.Y1,
-                                Width = bounds.X2 - bounds.X1,
-                                Height = bounds.Y2 - bounds.Y1
-                            }
-                        });
+                                Text = word.Trim(),
+                                Confidence = confidence,
+                                BoundingBox = new BoundingBox
+                                {
+                                    X = bounds.X1,
+                                    Y = bounds.Y1,
+                                    Width = bounds.X2 - bounds.X1,
+                                    Height = bounds.Y2 - bounds.Y1
+                                }
+                            });
+                        }
                     }
-                }
-            } while (iter.Next(PageIteratorLevel.Word));
-            
-            return results;
+                } while (iter.Next(PageIteratorLevel.Word));
+                
+                return results;
+            }
+            finally
+            {
+                if (File.Exists(tempFile))
+                    File.Delete(tempFile);
+            }
         }
         catch (Exception ex)
         {
@@ -110,10 +121,21 @@ public class OcrEngine : IDisposable
             var regionData = CropRegion(rgbaData, width, height, x, y, regionWidth, regionHeight);
             var grayData = ConvertToGrayscale(regionData, regionWidth, regionHeight);
             
-            using var img = Pix.LoadFromMemory(grayData);
-            using var page = _engine.Process(img);
-            
-            return page.GetText();
+            // Create a temporary PNG file and load it
+            var tempFile = Path.GetTempFileName() + ".png";
+            try
+            {
+                CreateGrayscalePng(grayData, regionWidth, regionHeight, tempFile);
+                using var img = Pix.LoadFromFile(tempFile);
+                using var page = _engine.Process(img);
+                
+                return page.GetText();
+            }
+            finally
+            {
+                if (File.Exists(tempFile))
+                    File.Delete(tempFile);
+            }
         }
         catch (Exception ex)
         {
@@ -161,6 +183,46 @@ public class OcrEngine : IDisposable
         }
         
         return cropped;
+    }
+    
+    private void CreateGrayscalePng(byte[] grayData, int width, int height, string filePath)
+    {
+        using var bitmap = new System.Drawing.Bitmap(width, height, System.Drawing.Imaging.PixelFormat.Format8bppIndexed);
+        
+        // Set up grayscale palette
+        var palette = bitmap.Palette;
+        for (int i = 0; i < 256; i++)
+        {
+            palette.Entries[i] = System.Drawing.Color.FromArgb(i, i, i);
+        }
+        bitmap.Palette = palette;
+        
+        // Lock bitmap data and copy grayscale data
+        var bitmapData = bitmap.LockBits(
+            new System.Drawing.Rectangle(0, 0, width, height),
+            System.Drawing.Imaging.ImageLockMode.WriteOnly,
+            System.Drawing.Imaging.PixelFormat.Format8bppIndexed);
+        
+        try
+        {
+            unsafe
+            {
+                byte* ptr = (byte*)bitmapData.Scan0;
+                for (int y = 0; y < height; y++)
+                {
+                    for (int x = 0; x < width; x++)
+                    {
+                        ptr[y * bitmapData.Stride + x] = grayData[y * width + x];
+                    }
+                }
+            }
+        }
+        finally
+        {
+            bitmap.UnlockBits(bitmapData);
+        }
+        
+        bitmap.Save(filePath, System.Drawing.Imaging.ImageFormat.Png);
     }
     
     public void Dispose()

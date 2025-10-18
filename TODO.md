@@ -1,19 +1,27 @@
-# TODO — Voyager-Style Plan to Clear the First Level
+# TODO — Voyager-Style Plan for Program Learning
 
-Goal: Autonomous agent learns and executes a minimal curriculum to get past the first level (e.g., Undead Asylum) in Dark Souls Remastered.
+Goal: Autonomous agent learns and executes programs through observation, skill acquisition, and goal-driven curriculum. This plan uses Dark Souls Remastered as an example target program.
 
 ## 0) Environment & Tooling
-- [ ] Confirm Dark Souls Remastered path and launch reliably
-- [ ] Detect and focus game window (HWND) before input
-- [ ] Run as admin for SendInput permissions
+- [x] Confirm target program path and launch reliably (generalized program registry)
+- [x] Detect and focus game window (HWND) before input
+- [x] Run as admin for SendInput permissions
 - [ ] Set graphics to windowed 1080p; disable frame caps/overlays
-- [ ] have unit tests un as part of the build pipeline
+- [x] have unit tests run as part of the build pipeline
+- [x] Focused capture: capture only the focused program window; re-acquire HWND if it changes
+- [x] Stamp `FocusedProgram` in `PerceptionState`; selector respects program scoping
+- [x] UI: display current focused program; allow switching focus from Programs panel
+- [ ] Persistence: store and restore last focused program on startup
+- [x] UI focus guard: keep viewer always-on-top and reassert focus (prevent child processes from stealing activation)
 
 ## 1) Perception Baseline (Works Without Models)
 - [ ] Verify BitBlt capture loop at ≥60 FPS (quick mode)
 - [ ] Implement lightweight HUD heuristics (health bar pixel scan)
 - [ ] Add color-threshold regions for “You Died”/menu prompts
 - [ ] Wire minimal PerceptionState (screen only) into selection
+- [ ] Add Windows.Graphics.Capture window capture path (prefer for focused HWND)
+- [ ] Handle cloaked/minimized windows (DWMWA_CLOAKED): pause capture until visible
+- [ ] D3D11 staging copy → BGRA byte[] for pipeline integration
 
 ## 2) Optional CV Signals (Upside Only)
 - [ ] Depth: MiDaS small (models/midas_small.onnx) — normalize [0,1]
@@ -29,10 +37,11 @@ Goal: Autonomous agent learns and executes a minimal curriculum to get past the 
 - [ ] Compose “OpenDoor” (interact + wait-for-animation)
 
 ## 4) Selection Loop (Sub‑16ms Path)
-- [ ] Rule-based fallback: tag/goal overlap + ELO weighting
-- [ ] Cache last-N contexts (TTL ~5s) for <1ms hot path
-- [ ] Candidate filtering (top-20 by relevance)
+- [x] Rule-based fallback: tag/goal overlap + ELO weighting
+- [x] Cache last-N contexts (TTL ~5s) for <1ms hot path
+- [x] Candidate filtering (top-20 by relevance)
 - [ ] Minimal local LLM prompt (optional); GGUF model switch
+- [x] Program scoping: use `program:<id>` for app-specific skills; allow generic (`vision`, `input`, `generic`)
 
 ## 5) Curriculum (Voyager-Style, Small Steps)
 - [ ] Define milestone goals:
@@ -66,6 +75,7 @@ Goal: Autonomous agent learns and executes a minimal curriculum to get past the 
 - [ ] Demo B: Traverse first fog gate
 - [ ] Demo C: Asylum demon avoidance (survive 30s)
 - [ ] Demo D: Asylum demon defeat (scripted micro-loop)
+- [x] Demo E: Program focus & skill scoping (switch programs, verify filtering)
 
 ## 10) Data & Evaluation
 - [ ] Log action sequences, outcomes, timings

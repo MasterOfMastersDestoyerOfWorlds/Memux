@@ -7,7 +7,6 @@ using Memux.Perception;
 using Memux.Selection;
 using Memux.Curriculum;
 using Memux.UI;
-using Memux.DarkSouls;
 // using Memux.CodeGen;
 
 namespace Memux;
@@ -39,7 +38,7 @@ class Program
         string? steamPath = null;
         bool preflight = false;
         string? programKey = null; // id or name from DB programs registry
-        bool noElevate = false;
+        bool noElevate = true;
         bool preflightLaunch = false;
         
         for (int i = 0; i < args.Length; i++)
@@ -243,7 +242,7 @@ class Program
 
             // Window checks: attach or optional launch
             IntPtr handle = IntPtr.Zero;
-            string processName = prog?.ProcessName ?? "DarkSoulsRemastered";
+            string processName = prog?.ProcessName ?? "UnknownProcess";
             var existing = Process.GetProcessesByName(processName);
             if (existing.Length > 0)
             {
@@ -356,49 +355,69 @@ class Program
         // Ensure Steam is running before attempting to attach/launch DSR
         EnsureSteamRunning(steamPath);
         
-        // If program registry has launch args (e.g., steam applaunch), pass through
-        var darkSouls = new DarkSoulsIntegration(gamePath, prog?.LaunchArgs);
-        
-        Console.WriteLine("Searching for Dark Souls Remastered...");
-        
-        // Try to attach to running instance or launch (prefer Steam app launch)
-        bool gameRunning = darkSouls.AttachToGame();
-        if (!gameRunning)
-        {
-            Console.WriteLine("Game not found; will fallback to desktop capture.");
-        }
-        
-        var windowHandle = darkSouls.GetGameWindowHandle();
-        if (windowHandle == IntPtr.Zero)
-        {
-            // Fallback: capture desktop so the app can still run
-            windowHandle = GetDesktopWindow();
-            if (windowHandle == IntPtr.Zero)
-            {
-                Console.WriteLine("ERROR: Could not acquire any window handle (game or desktop).");
-                return;
-            }
-            Console.WriteLine("Using desktop window for capture.");
-        }
-        
-        Console.WriteLine("Game window found!");
-        WindowFocusHelper.TryFocusWindow(windowHandle);
-        Console.WriteLine();
-        
-        // Initialize perception (CV models optional)
+        // Show UI immediately; start capture from desktop until user launches a program
         var cancellationToken = new CancellationTokenSource();
         PerceptionViewer.Closed += (_, __) =>
         {
             try { cancellationToken.Cancel(); } catch { }
+            // On UI close, kill any spawned programs and revert capture
+            try
+            {
+                foreach (var pid in Memux.UI.PerceptionViewer.SpawnedPids)
+                {
+                    try
+                    {
+                        var p = System.Diagnostics.Process.GetProcessById(pid);
+                        if (!p.HasExited)
+                        {
+                            if (!p.CloseMainWindow()) p.Kill(true);
+                            else if (!p.WaitForExit(3000)) p.Kill(true);
+                        }
+                    }
+                    catch { }
+                }
+            }
+            catch { }
         };
-        PerceptionViewer.Show();
+        
+        // Create model manager for Depth/Object model management
+        var modelManager = new ModelManager();
+        PerceptionViewer.Show(modelManager);
+        
+        var desktopHandle = GetDesktopWindow();
+        if (desktopHandle == IntPtr.Zero)
+        {
+            Console.WriteLine("ERROR: Could not acquire desktop window handle.");
+            return;
+        }
+        
         var perception = new PerceptionPipeline(
-            windowHandle,
+            desktopHandle,
             depthModel,
             objectModel,
             objectClasses,
             tessData,
             useGpu);
+        string? focusedProgramName = null;
+        PerceptionViewer.FocusedProgramChanged += (h, name) =>
+        {
+            try
+            {
+                if (h != IntPtr.Zero)
+                {
+                    perception.UpdateWindowHandle(h);
+                }
+                else
+                {
+                    var desktop = GetDesktopWindow();
+                    if (desktop != IntPtr.Zero) perception.UpdateWindowHandle(desktop);
+                }
+                focusedProgramName = string.IsNullOrEmpty(name) ? null : name;
+            }
+            catch { }
+        };
+        
+        Console.WriteLine("Viewer started. Launch a program from the Programs panel to focus capture.");
         var contextAnalyzer = new ContextAnalyzer();
         var executor = new ActionExecutor();
         
@@ -417,7 +436,7 @@ class Program
             curriculum.GoalCompleted += (s, e) => 
                 Console.WriteLine($"[Curriculum] Completed: {e.Goal.Description}");
             
-            var goals = await curriculum.GenerateInitialGoalsAsync("Dark Souls Remastered - Starting at Firelink Shrine");
+            var goals = await curriculum.GenerateInitialGoalsAsync($"Starting with {prog?.Name ?? "target program"}");
             Console.WriteLine($"Generated {goals.Count} initial goals");
         }
         
@@ -439,19 +458,12 @@ class Program
                 {
                     // Capture perception (includes CV if models configured)
                     var state = perception.CaptureAndProcess();
+                    // Stamp focused program for scoping
+                    state.FocusedProgram = focusedProgramName ?? prog?.Name;
                     
                     // If capture failed (e.g., window not ready), skip this frame
                     if (state.Width <= 0 || state.Height <= 0 || state.ScreenData == null || state.ScreenData.Length == 0)
                     {
-                        // Try re-acquiring the game window handle periodically in case the HWND changed (e.g., fullscreen switch)
-                        if (frameCount % 60 == 0)
-                        {
-                            var newHandle = darkSouls.GetGameWindowHandle();
-                            if (newHandle != IntPtr.Zero)
-                            {
-                                perception.UpdateWindowHandle(newHandle);
-                            }
-                        }
                         await Task.Delay(16);
                         continue;
                     }
@@ -482,10 +494,6 @@ class Program
                         var actions = chosen.Execute!(state);
                         var result = await executor.ExecuteAsync(actions, state);
                         skillLibrary.RecordUsage(chosen.Id, result.Success, result.ExecutionTimeMs);
-                        if (frameCount % 300 == 0)
-                        {
-                            Console.WriteLine($"[Loop] Executed: {chosen.Name}, Success: {result.Success}");
-                        }
                     }
                 }
                 catch (Exception ex)
@@ -618,7 +626,7 @@ class Program
         }
     }
 
-    private static bool LaunchDarkSoulsViaSteam(string? steamPath)
+    private static bool LaunchProgramViaSteam(string? steamPath, string launchArgs)
     {
         try
         {

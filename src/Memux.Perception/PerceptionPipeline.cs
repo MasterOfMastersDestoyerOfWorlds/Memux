@@ -1,4 +1,5 @@
 using Memux.Core.Models;
+using Memux.Core;
 
 namespace Memux.Perception;
 
@@ -37,10 +38,9 @@ public class PerceptionPipeline : IDisposable
             _objectDetector = new ObjectDetector(objectDetectionModelPath, objectDetectionClassesPath, useGpu);
         }
         
-        if (!string.IsNullOrEmpty(tessDataPath))
-        {
-            _ocrEngine = new OcrEngine(tessDataPath);
-        }
+        // Initialize OCR engine - use provided path or default to ./tessdata
+        string ocrPath = !string.IsNullOrEmpty(tessDataPath) ? tessDataPath : "./tessdata";
+        _ocrEngine = new OcrEngine(ocrPath);
     }
     
     /// <summary>
@@ -94,12 +94,10 @@ public class PerceptionPipeline : IDisposable
             // Wait for all CV tasks to complete
             Task.WaitAll(tasks.ToArray());
             
-            // Update frame stats
             _frameCount++;
             var now = DateTime.UtcNow;
             if ((now - _lastCaptureTime).TotalSeconds >= 1.0)
             {
-                Console.WriteLine($"Perception: {_frameCount} FPS");
                 _frameCount = 0;
                 _lastCaptureTime = now;
             }

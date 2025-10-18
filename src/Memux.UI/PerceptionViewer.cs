@@ -1,6 +1,7 @@
 using System.Drawing;
 using System.Windows.Forms;
 using Memux.Core.Models;
+using Memux.Core;
 
 namespace Memux.UI;
 
@@ -10,16 +11,21 @@ public static class PerceptionViewer
     private static PerceptionViewerForm? _form;
     private static readonly AutoResetEvent _ready = new(false);
     public static event EventHandler? Closed;
+    public static event Action<IntPtr, string>? FocusedProgramChanged;
+    private static readonly HashSet<int> _spawnedPids = new();
+    public static IReadOnlyCollection<int> SpawnedPids => _spawnedPids;
+    private static ModelManager? _modelManager;
 
-    public static void Show()
+    public static void Show(ModelManager? modelManager = null)
     {
         if (_uiThread != null && _uiThread.IsAlive) return;
 
+        _modelManager = modelManager;
         _uiThread = new Thread(() =>
         {
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
-            _form = new PerceptionViewerForm();
+            _form = new PerceptionViewerForm(_modelManager);
             _form.Shown += (_, __) => _form.GetType().GetMethod("RefreshPrograms", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)?.Invoke(_form, null);
             _form.Load += (_, __) => _ready.Set();
             _form.FormClosed += (_, __) =>
@@ -92,6 +98,24 @@ public static class PerceptionViewer
         }
         catch { }
     }
+
+    internal static void RaiseFocusedProgram(IntPtr hWnd, string name)
+    {
+        try { FocusedProgramChanged?.Invoke(hWnd, name); } catch { }
+    }
+
+    public static void RegisterSpawnedProcess(System.Diagnostics.Process proc)
+    {
+        try { _spawnedPids.Add(proc.Id); } catch { }
+    }
+
+    public static IntPtr GetDesktopHandle()
+    {
+        return GetDesktopWindow();
+    }
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern IntPtr GetDesktopWindow();
 }
 
 

@@ -73,7 +73,6 @@ public class SkillSelector : IDisposable
             if (_cache.TryGetCachedSkill(cacheKey, out var cachedSkill))
             {
                 stopwatch.Stop();
-                Console.WriteLine($"Skill selection (cached): {stopwatch.ElapsedMilliseconds}ms");
                 return cachedSkill;
             }
             
@@ -92,7 +91,6 @@ public class SkillSelector : IDisposable
                 var skill = candidates[0];
                 _cache.CacheSkill(cacheKey, skill);
                 stopwatch.Stop();
-                Console.WriteLine($"Skill selection (single): {skill.Name} in {stopwatch.ElapsedMilliseconds}ms");
                 return skill;
             }
             
@@ -144,6 +142,11 @@ public class SkillSelector : IDisposable
         
         foreach (var skill in allSkills)
         {
+            // Program scoping: allow generic skills or those tagged for current program
+            if (!IsSkillAllowedForFocusedProgram(skill, context))
+            {
+                continue;
+            }
             var relevance = CalculateRelevance(skill, context, currentGoal);
             if (relevance > 0)
             {
@@ -158,6 +161,28 @@ public class SkillSelector : IDisposable
             .ToList();
         
         return candidates;
+    }
+
+    private static bool IsSkillAllowedForFocusedProgram(Skill skill, ContextInfo context)
+    {
+        // Focused program is encoded into ContextInfo tags by ContextAnalyzer; it can also be passed via PerceptionState
+        // Convention: program:<id>
+        var programTag = context.Tags.FirstOrDefault(t => t.StartsWith("program:", StringComparison.OrdinalIgnoreCase));
+        if (string.IsNullOrEmpty(programTag))
+        {
+            // No program focus → allow generic
+            return true;
+        }
+        var programId = programTag.Substring("program:".Length);
+        // A skill is allowed if:
+        // - It has tag program:<programId>
+        // - Or it is generic: has any of tags [vision, input, generic]
+        bool generic = skill.Tags.Any(t =>
+            t.Equals("vision", StringComparison.OrdinalIgnoreCase) ||
+            t.Equals("input", StringComparison.OrdinalIgnoreCase) ||
+            t.Equals("generic", StringComparison.OrdinalIgnoreCase));
+        if (generic) return true;
+        return skill.Tags.Any(t => t.Equals($"program:{programId}", StringComparison.OrdinalIgnoreCase));
     }
     
     /// <summary>

@@ -1,6 +1,6 @@
-# Memux — Voyager-Inspired Skill Acquisition for Dark Souls
+# Memux — Voyager-Inspired Program Learning System
 
-Memux is an autonomous skill acquisition system inspired by Voyager (MineDojo). It learns skills through observation and execution, using a perception pipeline (screen capture + CV), a local selector for real-time decisions, and a large-model composer for new skill generation.
+Memux is an autonomous program learning system inspired by Voyager (MineDojo). It learns to interact with any program through observation and execution, using a perception pipeline (screen capture + CV), a local selector for real-time decisions, and a large-model composer for new skill generation.
 
 ## What You Get (High-Level)
 
@@ -10,7 +10,7 @@ Memux is an autonomous skill acquisition system inspired by Voyager (MineDojo). 
 - Composer: LLM-based skill generation and debugging
 - Curriculum: Goal generation and progress tracking
 
-All components are designed to be game-agnostic; `Memux.DarkSouls` provides the thin integration layer.
+All components are designed to be program-agnostic; the `examples/` folder contains integration examples for specific applications.
 
 ## Current Status (Phases 1–4 Implemented)
 
@@ -28,16 +28,20 @@ These provide a complete loop for perception → selection → execution, and an
 dotnet build
 ```
 
-2) Optional: Download minimal CV models (Windows PowerShell)
+2) Initialize git submodules (includes tessdata_best for OCR)
+```bash
+git submodule update --init --recursive
+```
+
+3) Optional: Download additional CV models (Windows PowerShell)
 ```powershell
-New-Item -ItemType Directory -Force -Path "models\tessdata"
+New-Item -ItemType Directory -Force -Path "models"
 Invoke-WebRequest -Uri "https://github.com/isl-org/MiDaS/releases/download/v3_1/midas_v21_small_256.onnx" -OutFile "models\midas_small.onnx"
 Invoke-WebRequest -Uri "https://github.com/ultralytics/assets/releases/download/v0.0.0/yolov8n.onnx" -OutFile "models\yolov8n.onnx"
 Invoke-WebRequest -Uri "https://raw.githubusercontent.com/pjreddie/darknet/master/data/coco.names" -OutFile "models\coco_classes.txt"
-Invoke-WebRequest -Uri "https://github.com/tesseract-ocr/tessdata_fast/raw/main/eng.traineddata" -OutFile "models\tessdata\eng.traineddata"
 ```
 
-3) Run demos (pick what you need)
+4) Run demos (pick what you need)
 ```bash
 # LLM (composer) demo
 dotnet run --project src/Memux.App -- --phase2-demo
@@ -71,6 +75,15 @@ Perception ──→ Context ──→ Selection ──→ Execution
 - Execution: Action queues simulate inputs
 - Composer: Large model generates/repairs skills offline
 - Curriculum: Goals drive exploration and acquisition
+
+## Technology Stack
+
+- **OCR**: Tesseract 5.2.0 via tessdata_best git submodule (English trained data included)
+- **CV Models**: MiDaS (depth), YOLOv8 (objects), Tesseract (text)
+- **Local LLM**: LLamaSharp (GGUF format)
+- **Remote LLM**: OpenAI API (GPT-4)
+- **Database**: SQLite with custom schema
+- **UI**: Windows Forms (always-on-top focus guard)
 
 ## Roadmap to “Past the First Level”
 

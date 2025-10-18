@@ -2,18 +2,18 @@ using System.Diagnostics;
 using System.Runtime.InteropServices;
 using Memux.Core;
 
-namespace Memux.DarkSouls;
+namespace Memux.Examples;
 
 /// <summary>
-/// Dark Souls Remastered specific integration
-/// Minimal game-specific code - just window finding and input mapping
+/// Dark Souls Remastered specific integration example
+/// This demonstrates how to create game-specific integrations for Memux
 /// </summary>
 public class DarkSoulsIntegration
 {
     private const string PROCESS_NAME = "DarkSoulsRemastered";
     private const string WINDOW_TITLE = "DARK SOULS";
     // Default Steam launch
-    private const string DEFAULT_STEAM_EXE = @"C:\\Program Files (x86)\\Steam\\steam.exe";
+    private const string DEFAULT_STEAM_EXE = @"C:\Program Files (x86)\Steam\steam.exe";
     private const string DEFAULT_STEAM_ARGS = "-applaunch 570940";
 
     private readonly ProcessManager _processManager;
@@ -132,4 +132,3 @@ public class DarkSoulsIntegration
     [DllImport("user32.dll", SetLastError = true)]
     private static extern IntPtr FindWindow(string? lpClassName, string lpWindowName);
 }
-

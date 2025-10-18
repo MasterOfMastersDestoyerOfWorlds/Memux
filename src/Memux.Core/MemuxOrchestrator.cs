@@ -85,10 +85,8 @@ public class MemuxOrchestrator
                     Thread.Sleep((int)sleepTime);
                 }
                 
-                // Print FPS every second
                 if ((DateTime.UtcNow - lastFrameTime).TotalSeconds >= 1.0)
                 {
-                    Console.WriteLine($"FPS: {frameCount}");
                     frameCount = 0;
                     lastFrameTime = DateTime.UtcNow;
                 }

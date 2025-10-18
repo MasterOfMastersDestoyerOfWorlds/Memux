@@ -350,7 +350,7 @@ public class SkillLibrary
             new List<string> { "input", "keyboard" }
         );
         
-        // Dodge (for Dark Souls)
+        // Dodge (example game action)
         await AddSkillAsync(
             "DodgeRoll",
             @"queue.AddButtonPress(""B"", 50);",
